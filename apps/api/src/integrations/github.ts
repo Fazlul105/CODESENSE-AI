@@ -1,4 +1,4 @@
-import { Octokit } from '@octokit/rest';
+import type { Octokit } from '@octokit/rest';
 import { ChangedFile, PullRequestMetadata } from '@codesense/shared';
 import { config } from '../config';
 
@@ -48,9 +48,15 @@ export function parsePullRequestUrl(input: string): ParsedPrUrl {
   );
 }
 
-export function getOctokitClient(userToken?: string): Octokit {
+let CachedOctokit: any = null;
+
+export async function getOctokitClient(userToken?: string): Promise<Octokit> {
+  if (!CachedOctokit) {
+    const mod: any = await (Function('m', 'return import(m)')('@octokit/rest'));
+    CachedOctokit = mod.Octokit || mod.default?.Octokit || mod.default;
+  }
   const auth = userToken || config.github.token || undefined;
-  return new Octokit({
+  return new CachedOctokit({
     auth,
     userAgent: 'CodeSense-AI/1.0.0',
   });
@@ -93,7 +99,7 @@ export async function fetchPullRequestMetadata(
   pullNumber: number,
   token?: string
 ): Promise<PullRequestMetadata> {
-  const octokit = getOctokitClient(token);
+  const octokit = await getOctokitClient(token);
 
   try {
     const { data: pr } = await octokit.rest.pulls.get({
@@ -141,7 +147,7 @@ export async function fetchPullRequestFiles(
   pullNumber: number,
   token?: string
 ): Promise<ChangedFile[]> {
-  const octokit = getOctokitClient(token);
+  const octokit = await getOctokitClient(token);
   const files: ChangedFile[] = [];
   let page = 1;
   const perPage = 50;
@@ -205,7 +211,7 @@ export async function fetchFileContentAtRef(
   ref: string,
   token?: string
 ): Promise<string | null> {
-  const octokit = getOctokitClient(token);
+  const octokit = await getOctokitClient(token);
   try {
     const { data } = await octokit.rest.repos.getContent({
       owner,

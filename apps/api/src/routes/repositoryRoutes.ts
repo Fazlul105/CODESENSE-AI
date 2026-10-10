@@ -20,7 +20,7 @@ router.get('/:owner/:repo/pulls', async (req: Request, res: Response) => {
   const state = (req.query.state as 'open' | 'closed' | 'all') || 'open';
 
   try {
-    const octokit = getOctokitClient();
+    const octokit = await getOctokitClient();
     const { data: pulls } = await octokit.rest.pulls.list({
       owner,
       repo,
