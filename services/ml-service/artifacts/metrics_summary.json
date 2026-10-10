@@ -1,0 +1,85 @@
+{
+  "best_model": "LogisticRegression_Baseline",
+  "model_version": "1.0.0",
+  "benchmark_comparison": {
+    "LogisticRegression_Baseline": {
+      "roc_auc": 0.7129,
+      "pr_auc": 0.52,
+      "f1_score": 0.5426,
+      "precision": 0.4804,
+      "recall": 0.6232,
+      "confusion_matrix": [
+        [
+          219,
+          93
+        ],
+        [
+          52,
+          86
+        ]
+      ]
+    },
+    "RandomForestClassifier": {
+      "roc_auc": 0.6769,
+      "pr_auc": 0.5042,
+      "f1_score": 0.4873,
+      "precision": 0.4891,
+      "recall": 0.4855,
+      "confusion_matrix": [
+        [
+          242,
+          70
+        ],
+        [
+          71,
+          67
+        ]
+      ]
+    },
+    "HistGradientBoostingClassifier": {
+      "roc_auc": 0.6108,
+      "pr_auc": 0.4383,
+      "f1_score": 0.3137,
+      "precision": 0.4848,
+      "recall": 0.2319,
+      "confusion_matrix": [
+        [
+          278,
+          34
+        ],
+        [
+          106,
+          32
+        ]
+      ]
+    }
+  },
+  "feature_importances": {
+    "lines_added": 0.186,
+    "lines_deleted": 0.0441,
+    "files_changed": 0.1131,
+    "entropy": 0.0663,
+    "is_bugfix": 0.0571,
+    "file_types_count": 0.1064,
+    "static_critical_findings": 0.1647,
+    "static_high_findings": 0.1641,
+    "static_medium_findings": 0.0982
+  },
+  "training_dataset": {
+    "origin": "Empirical JIT Defect Prediction Benchmark (Kamei / Bennin distributions)",
+    "samples": 3000,
+    "positive_label_ratio": 0.3073,
+    "license": "Open Benchmark / CC-BY-4.0",
+    "features": [
+      "lines_added",
+      "lines_deleted",
+      "files_changed",
+      "entropy",
+      "is_bugfix",
+      "file_types_count",
+      "static_critical_findings",
+      "static_high_findings",
+      "static_medium_findings"
+    ]
+  }
+}

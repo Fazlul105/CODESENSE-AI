@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  ml-service:
+    build:
+      context: ./services/ml-service
+      dockerfile: Dockerfile
+    container_name: codesense-ml-service
+    ports:
+      - "8000:8000"
+    restart: always
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: codesense-api
+    ports:
+      - "5001:5001"
+    environment:
+      - NODE_ENV=production
+      - API_PORT=5001
+      - FRONTEND_URL=http://localhost:3000
+      - MONGODB_URI=${MONGODB_URI}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - SESSION_SECRET=${SESSION_SECRET:-codesense-production-secret-key-min-32-chars}
+      - AI_PROVIDER=${AI_PROVIDER:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.8-flash}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ML_SERVICE_URL=http://ml-service:8000
+    depends_on:
+      - ml-service
+    restart: always
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:5001/api
+    container_name: codesense-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: always
