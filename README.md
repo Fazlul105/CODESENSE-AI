@@ -2,6 +2,16 @@
 
 > **"Smarter Code Reviews. Better Software."**
 
+[![Live Demo](https://img.shields.io/badge/Live%20Web%20App-codesense--ai--iota.vercel.app-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://codesense-ai-iota.vercel.app)
+[![Production API](https://img.shields.io/badge/Production%20API-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://codesense-api-fazlul.onrender.com/api/health)
+[![ML Microservice](https://img.shields.io/badge/ML%20Service-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://codesense-ml-service.onrender.com/health)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Fazlul105%2FCODESENSE--AI-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Fazlul105/CODESENSE-AI)
+
+🌐 **Live Website:** [https://codesense-ai-iota.vercel.app](https://codesense-ai-iota.vercel.app)  
+📡 **Production REST API:** [https://codesense-api-fazlul.onrender.com](https://codesense-api-fazlul.onrender.com)  
+🤖 **AI Review Engine:** Google Gemini (`gemini-3.8-flash`)  
+📊 **ML Defect Inference:** FastAPI + Scikit-Learn
+
 CodeSense AI is a production-grade developer platform that combines **deterministic AST static code analysis**, **supervised machine learning defect-risk estimation**, and **LLM-grounded explanations** to review GitHub pull requests in real time.
 
 ---
