@@ -26,9 +26,20 @@ export function FindingCard({ finding }: { finding: ReviewFinding }) {
             <div className="flex flex-wrap items-center gap-2">
               <SeverityBadge severity={finding.severity} />
               <span className="text-xs font-mono text-slate-400">{finding.ruleId}</span>
-              <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300">
-                {finding.isDeterministic ? 'Deterministic Rule' : 'AI Analysis'}
-              </span>
+              {finding.isDeterministic ? (
+                <span className="inline-flex items-center gap-1 rounded bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 text-[10px] font-medium text-cyan-400">
+                  <Code2 className="h-3 w-3" />
+                  Deterministic AST Rule
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1 rounded bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-[10px] font-medium text-purple-300"
+                  title="AI-generated contextual hypothesis — verify before treating as confirmed vulnerability"
+                >
+                  <Sparkles className="h-3 w-3 text-purple-400" />
+                  AI Contextual Hypothesis
+                </span>
+              )}
             </div>
             <h4 className="mt-1 text-sm font-medium text-slate-100">{finding.title}</h4>
             <p className="text-xs text-slate-400 font-mono mt-0.5">

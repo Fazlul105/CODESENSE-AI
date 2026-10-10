@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import mongoose from 'mongoose';
+import { config } from '../config';
 import {
   parsePullRequestUrl,
   fetchPullRequestMetadata,
@@ -14,6 +15,8 @@ import {
   ReviewFinding,
   AnalysisReport,
 } from '../models';
+import { canAccessAnalysis } from '../middleware/auth';
+import { redactSensitiveData } from '../utils/redact';
 
 const createAnalysisSchema = z.object({
   pullRequestUrl: z.string().min(1, 'Pull request URL is required'),
@@ -45,9 +48,13 @@ export async function createAnalysis(req: Request, res: Response): Promise<void>
 
   const { owner, repo, pullNumber } = parsed;
   const fullName = `${owner}/${repo}`.toLowerCase();
+  const currentUser = req.user;
 
   try {
-    // 1. Ensure Repository record exists
+    // 1. Fetch PR metadata from GitHub
+    const prMeta = await fetchPullRequestMetadata(owner, repo, pullNumber);
+
+    // 2. Ensure Repository record exists
     let repoDoc = await Repository.findOne({ fullName });
     if (!repoDoc) {
       repoDoc = await Repository.create({
@@ -59,10 +66,16 @@ export async function createAnalysis(req: Request, res: Response): Promise<void>
       });
     }
 
-    // 2. Fetch PR metadata from GitHub
-    const prMeta = await fetchPullRequestMetadata(owner, repo, pullNumber);
+    // 3. Security Policy: Reject anonymous analysis of private repositories
+    if (repoDoc.isPrivate && !currentUser) {
+      res.status(403).json({
+        success: false,
+        error: 'Anonymous users can only analyze public repositories. Please log in with GitHub to analyze private repositories.',
+      });
+      return;
+    }
 
-    // 3. Ensure PullRequest record exists or update
+    // 4. Ensure PullRequest record exists or update
     let prDoc = await PullRequest.findOne({ owner, repo, number: pullNumber });
     if (!prDoc) {
       prDoc = await PullRequest.create({
@@ -93,11 +106,12 @@ export async function createAnalysis(req: Request, res: Response): Promise<void>
       await prDoc.save();
     }
 
-    // 4. Create AnalysisJob
+    // 5. Create AnalysisJob associated with user if authenticated
     const job = await AnalysisJob.create({
+      user: currentUser ? currentUser._id : undefined,
+      isAnonymous: !Boolean(currentUser),
       repository: repoDoc._id,
       pullRequest: prDoc._id,
-      isAnonymous: true,
       status: 'in_progress',
       progressPercent: 5,
       statusMessage: 'Fetching pull request changes from GitHub...',
@@ -122,27 +136,44 @@ export async function createAnalysis(req: Request, res: Response): Promise<void>
       },
     });
 
-    // Run async analysis pipeline in the background
+    // Run async analysis pipeline with timeout guard
     (async () => {
+      const timeoutMs = config.limits.analysisTimeoutMs || 120000;
+      let isTimedOut = false;
+      const timer = setTimeout(async () => {
+        isTimedOut = true;
+        await AnalysisJob.findByIdAndUpdate(job._id, {
+          status: 'failed',
+          error: `Analysis job exceeded execution timeout limit (${timeoutMs / 1000}s)`,
+          statusMessage: 'Job execution timed out',
+        });
+      }, timeoutMs);
+
       try {
         const files = await fetchPullRequestFiles(owner, repo, pullNumber);
+
+        if (isTimedOut) return;
 
         const result = await analyzePullRequest(
           prMeta,
           files,
-          undefined,
+          currentUser?.accessToken || undefined,
           async (percent, message) => {
-            await AnalysisJob.findByIdAndUpdate(job._id, {
-              progressPercent: percent,
-              statusMessage: message,
-            });
+            if (!isTimedOut) {
+              await AnalysisJob.findByIdAndUpdate(job._id, {
+                progressPercent: percent,
+                statusMessage: message,
+              });
+            }
           }
         );
+
+        if (isTimedOut) return;
 
         // Delete any existing findings for this analysis
         await ReviewFinding.deleteMany({ analysisId: job._id });
 
-        // Save findings to MongoDB
+        // Save findings to MongoDB with secret redaction applied to snippets & patches
         const findingDocs = result.findings.map((f) => ({
           analysisId: job._id,
           ruleId: f.ruleId,
@@ -154,8 +185,8 @@ export async function createAnalysis(req: Request, res: Response): Promise<void>
           endLine: f.endLine,
           explanation: f.explanation,
           suggestion: f.suggestion,
-          suggestedPatch: f.suggestedPatch,
-          codeSnippet: f.codeSnippet,
+          suggestedPatch: f.suggestedPatch ? redactSensitiveData(f.suggestedPatch) : undefined,
+          codeSnippet: f.codeSnippet ? redactSensitiveData(f.codeSnippet) : undefined,
           confidence: f.confidence,
           source: f.source,
           isDeterministic: f.isDeterministic,
@@ -189,12 +220,16 @@ export async function createAnalysis(req: Request, res: Response): Promise<void>
           completedAt: new Date(),
         });
       } catch (pipelineErr: any) {
-        console.error(`[AnalysisJob] Pipeline failed for ${job._id}:`, pipelineErr);
-        await AnalysisJob.findByIdAndUpdate(job._id, {
-          status: 'failed',
-          error: pipelineErr.message || 'Analysis pipeline encountered an error',
-          statusMessage: 'Failed to complete analysis',
-        });
+        if (!isTimedOut) {
+          console.error(`[AnalysisJob] Pipeline failed for ${job._id}:`, pipelineErr);
+          await AnalysisJob.findByIdAndUpdate(job._id, {
+            status: 'failed',
+            error: pipelineErr.message || 'Analysis pipeline encountered an error',
+            statusMessage: 'Failed to complete analysis',
+          });
+        }
+      } finally {
+        clearTimeout(timer);
       }
     })();
   } catch (err: any) {
@@ -213,9 +248,15 @@ export async function getAnalysisStatus(req: Request, res: Response): Promise<vo
     return;
   }
 
-  const job = await AnalysisJob.findById(id).select('status progressPercent statusMessage error filesAnalyzed');
+  const job = await AnalysisJob.findById(id).select('status progressPercent statusMessage error filesAnalyzed repository user isAnonymous');
   if (!job) {
     res.status(404).json({ success: false, error: 'Analysis job not found' });
+    return;
+  }
+
+  const access = await canAccessAnalysis(job, req.user);
+  if (!access.allowed) {
+    res.status(403).json({ success: false, error: access.reason });
     return;
   }
 
@@ -247,9 +288,15 @@ export async function getAnalysis(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  const access = await canAccessAnalysis(job, req.user);
+  if (!access.allowed) {
+    res.status(403).json({ success: false, error: access.reason });
+    return;
+  }
+
   const report = await AnalysisReport.findOne({ analysisId: job._id });
   const findings = await ReviewFinding.find({ analysisId: job._id }).sort({
-    severity: 1, // Will sort in application code
+    severity: 1,
     line: 1,
   });
 
@@ -270,16 +317,28 @@ export async function getAnalysisFindings(req: Request, res: Response): Promise<
     return;
   }
 
+  const job = await AnalysisJob.findById(id);
+  if (!job) {
+    res.status(404).json({ success: false, error: 'Analysis job not found' });
+    return;
+  }
+
+  const access = await canAccessAnalysis(job, req.user);
+  if (!access.allowed) {
+    res.status(403).json({ success: false, error: access.reason });
+    return;
+  }
+
   const { severity, category, file } = req.query;
   const filter: any = { analysisId: id };
 
-  if (severity && typeof severity === 'string') {
+  if (severity && typeof severity === 'string' && severity !== 'all') {
     filter.severity = severity;
   }
-  if (category && typeof category === 'string') {
+  if (category && typeof category === 'string' && category !== 'all') {
     filter.category = category;
   }
-  if (file && typeof file === 'string') {
+  if (file && typeof file === 'string' && file !== 'all') {
     filter.filePath = file;
   }
 
@@ -294,6 +353,18 @@ export async function getAnalysisReport(req: Request, res: Response): Promise<vo
   const { id } = req.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     res.status(400).json({ success: false, error: 'Invalid analysis ID' });
+    return;
+  }
+
+  const job = await AnalysisJob.findById(id);
+  if (!job) {
+    res.status(404).json({ success: false, error: 'Analysis not found' });
+    return;
+  }
+
+  const access = await canAccessAnalysis(job, req.user);
+  if (!access.allowed) {
+    res.status(403).json({ success: false, error: access.reason });
     return;
   }
 
@@ -319,6 +390,12 @@ export async function exportAnalysisMarkdown(req: Request, res: Response): Promi
   const job = await AnalysisJob.findById(id).populate('repository').populate('pullRequest');
   if (!job) {
     res.status(404).json({ success: false, error: 'Analysis not found' });
+    return;
+  }
+
+  const access = await canAccessAnalysis(job, req.user);
+  if (!access.allowed) {
+    res.status(403).json({ success: false, error: access.reason });
     return;
   }
 
@@ -370,9 +447,11 @@ export async function exportAnalysisMarkdown(req: Request, res: Response): Promi
   md += `## Limitations & Methodology\n`;
   md += `Automated code analysis by CodeSense AI combines deterministic AST parsing, rule-based heuristics, and defect risk estimation. It highlights potential issues and regressions but does not guarantee the absence of defects. Manual peer review remains recommended for safety-critical releases.\n`;
 
+  const sanitizedMarkdown = redactSensitiveData(md);
+
   res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="codesense-review-${repo.name}-pr${pr.number}.md"`);
-  res.send(md);
+  res.send(sanitizedMarkdown);
 }
 
 export async function chatAnalysis(req: Request, res: Response): Promise<void> {
@@ -395,6 +474,12 @@ export async function chatAnalysis(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  const access = await canAccessAnalysis(job, req.user);
+  if (!access.allowed) {
+    res.status(403).json({ success: false, error: access.reason });
+    return;
+  }
+
   const { askAssistantQuestion } = await import('../services/llmService');
   const report = await AnalysisReport.findOne({ analysisId: job._id });
   const findings = await ReviewFinding.find({ analysisId: job._id });
@@ -402,7 +487,7 @@ export async function chatAnalysis(req: Request, res: Response): Promise<void> {
   const repo: any = job.repository;
   const pr: any = job.pullRequest;
 
-  const answer = await askAssistantQuestion(question, {
+  const answer = await askAssistantQuestion(redactSensitiveData(question), {
     prTitle: pr.title,
     repo: repo.fullName,
     findings: findings as any,
@@ -412,7 +497,7 @@ export async function chatAnalysis(req: Request, res: Response): Promise<void> {
   res.json({
     success: true,
     data: {
-      answer,
+      answer: redactSensitiveData(answer),
       timestamp: new Date().toISOString(),
     },
   });

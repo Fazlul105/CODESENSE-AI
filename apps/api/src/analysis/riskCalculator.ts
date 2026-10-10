@@ -140,3 +140,33 @@ export function calculateHeuristicRisk(metrics: RiskInputMetrics): RiskAssessmen
     summary,
   };
 }
+
+/**
+ * Calculates normalized Shannon Change Entropy of modified lines across files.
+ * Adheres to standard Just-In-Time defect prediction literature (Hassan 2009, Kamei et al. 2013).
+ * When changes are concentrated in a single file: entropy = 0.0.
+ * When changes are dispersed evenly across n files: entropy = 1.0.
+ */
+export function calculateChangeEntropy(files: Array<{ additions?: number; deletions?: number }>): number {
+  const n = files.length;
+  if (n <= 1) return 0.0;
+
+  const churns = files.map((f) => (f.additions || 0) + (f.deletions || 0));
+  const totalChurn = churns.reduce((sum, c) => sum + c, 0);
+
+  if (totalChurn === 0) return 0.0;
+
+  let entropy = 0.0;
+  for (const c of churns) {
+    if (c > 0) {
+      const p = c / totalChurn;
+      entropy -= p * Math.log2(p);
+    }
+  }
+
+  const maxEntropy = Math.log2(n);
+  if (maxEntropy === 0) return 0.0;
+
+  const normalized = entropy / maxEntropy;
+  return Math.round(Math.min(1.0, Math.max(0.0, normalized)) * 1000) / 1000;
+}

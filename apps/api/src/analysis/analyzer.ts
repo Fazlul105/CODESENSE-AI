@@ -123,12 +123,15 @@ export async function analyzePullRequest(
     findings: allFindings,
   });
 
-  // Attempt ML Service Defect Prediction
+  // Attempt ML Service Defect Prediction using standard scientific change entropy
   try {
     const axios = (await import('axios')).default;
     const { config } = await import('../config');
+    const { calculateChangeEntropy } = await import('./riskCalculator');
+
     const isBugfix = pr.title.toLowerCase().includes('fix') || (pr.body && pr.body.toLowerCase().includes('fix')) ? 1 : 0;
-    const distinctExts = new Set(files.map((f) => f.filename.split('.').pop() || '')).size;
+    const distinctExts = Math.max(1, new Set(files.map((f) => f.filename.split('.').pop() || '')).size);
+    const realEntropy = calculateChangeEntropy(files.map((f) => ({ additions: f.additions, deletions: f.deletions })));
 
     const mlResponse = await axios.post(
       `${config.mlServiceUrl}/predict`,
@@ -136,9 +139,9 @@ export async function analyzePullRequest(
         lines_added: pr.additions,
         lines_deleted: pr.deletions,
         files_changed: Math.max(1, pr.changedFilesCount),
-        entropy: Math.min(1.0, (distinctExts / Math.max(1, pr.changedFilesCount))),
+        entropy: realEntropy,
         is_bugfix: isBugfix,
-        file_types_count: Math.max(1, distinctExts),
+        file_types_count: distinctExts,
         static_critical_findings: findingsCount.critical,
         static_high_findings: findingsCount.high,
         static_medium_findings: findingsCount.medium,
@@ -150,23 +153,12 @@ export async function analyzePullRequest(
       const mlData = mlResponse.data;
       const mlScore = Math.round(mlData.defect_probability * 100);
 
-      riskAssessment.method = 'ml_model';
-      // Weighted combination: 60% ML Model, 40% Static Heuristic
-      riskAssessment.overallScore = Math.round(mlScore * 0.6 + riskAssessment.overallScore * 0.4);
-      riskAssessment.riskLevel =
-        riskAssessment.overallScore >= 75
-          ? 'critical'
-          : riskAssessment.overallScore >= 50
-          ? 'high'
-          : riskAssessment.overallScore >= 25
-          ? 'medium'
-          : 'low';
-
+      // Separate and display ML defect-risk estimate alongside heuristic assessment
       riskAssessment.mlDetails = {
         modelVersion: mlData.model_version,
         modelType: mlData.model_type,
         defectProbability: mlData.defect_probability,
-        topFeatures: mlData.top_contributing_features.map((f: any) => ({
+        topFeatures: (mlData.top_contributing_features || []).map((f: any) => ({
           feature: f.feature,
           importance: f.importance,
         })),
@@ -179,9 +171,7 @@ export async function analyzePullRequest(
           : undefined,
       };
 
-      riskAssessment.summary = `ML Defect Estimation (${mlData.model_type} v${mlData.model_version}): ${Math.round(
-        mlData.defect_probability * 100
-      )}% probability of introducing a regression. ${riskAssessment.summary}`;
+      riskAssessment.summary = `Experimental ML Defect-Risk Estimate (${mlData.model_type} v${mlData.model_version}): ${mlScore}% estimated regression probability based on Kamei et al. JIT defect benchmark data. Note: Defect risk estimates regression likelihood from code churn and does not confirm security vulnerabilities. ${riskAssessment.summary}`;
     }
   } catch {
     // If ML service is offline, gracefully retain documented heuristic calculation

@@ -1,75 +1,80 @@
 {
-  "best_model": "LogisticRegression_Baseline",
-  "model_version": "1.0.0",
+  "best_model": "RandomForestClassifier",
+  "model_version": "2.0.0",
   "benchmark_comparison": {
     "LogisticRegression_Baseline": {
-      "roc_auc": 0.7129,
-      "pr_auc": 0.52,
-      "f1_score": 0.5426,
-      "precision": 0.4804,
-      "recall": 0.6232,
+      "roc_auc": 0.8521,
+      "pr_auc": 0.7803,
+      "f1_score": 0.6792,
+      "precision": 0.8036,
+      "recall": 0.5882,
+      "brier_score": 0.1386,
       "confusion_matrix": [
         [
-          219,
-          93
+          837,
+          66
         ],
         [
-          52,
-          86
+          189,
+          270
         ]
       ]
     },
     "RandomForestClassifier": {
-      "roc_auc": 0.6769,
-      "pr_auc": 0.5042,
-      "f1_score": 0.4873,
-      "precision": 0.4891,
-      "recall": 0.4855,
+      "roc_auc": 0.8627,
+      "pr_auc": 0.8016,
+      "f1_score": 0.6913,
+      "precision": 0.7632,
+      "recall": 0.6318,
+      "brier_score": 0.1351,
       "confusion_matrix": [
         [
-          242,
-          70
+          813,
+          90
         ],
         [
-          71,
-          67
+          169,
+          290
         ]
       ]
     },
     "HistGradientBoostingClassifier": {
-      "roc_auc": 0.6108,
-      "pr_auc": 0.4383,
-      "f1_score": 0.3137,
-      "precision": 0.4848,
-      "recall": 0.2319,
+      "roc_auc": 0.8589,
+      "pr_auc": 0.788,
+      "f1_score": 0.6775,
+      "precision": 0.7988,
+      "recall": 0.5882,
+      "brier_score": 0.1352,
       "confusion_matrix": [
         [
-          278,
-          34
+          835,
+          68
         ],
         [
-          106,
-          32
+          189,
+          270
         ]
       ]
     }
   },
   "feature_importances": {
-    "lines_added": 0.186,
-    "lines_deleted": 0.0441,
-    "files_changed": 0.1131,
-    "entropy": 0.0663,
-    "is_bugfix": 0.0571,
-    "file_types_count": 0.1064,
-    "static_critical_findings": 0.1647,
-    "static_high_findings": 0.1641,
-    "static_medium_findings": 0.0982
+    "lines_added": 0.0065,
+    "lines_deleted": 0.0155,
+    "files_changed": 0.1279,
+    "entropy": 0.0849,
+    "is_bugfix": 0.0326,
+    "file_types_count": 0.0176,
+    "static_critical_findings": 0.1413,
+    "static_high_findings": 0.3324,
+    "static_medium_findings": 0.2414
   },
   "training_dataset": {
-    "origin": "Empirical JIT Defect Prediction Benchmark (Kamei / Bennin distributions)",
-    "samples": 3000,
-    "positive_label_ratio": 0.3073,
-    "license": "Open Benchmark / CC-BY-4.0",
+    "origin": "Kamei et al. Authentic JIT Defect Prediction Benchmark",
+    "citation": "Bugzilla & Columba Open-Source Projects (IEEE TSE 2013)",
+    "labeling": "SZZ Algorithm linking commit histories to issue tracker fixes",
+    "samples": 9075,
+    "positive_label_ratio": 0.3369,
+    "license": "CC-BY-4.0 / Academic Open Data",
     "features": [
       "lines_added",
       "lines_deleted",
@@ -80,6 +85,11 @@
       "static_critical_findings",
       "static_high_findings",
       "static_medium_findings"
+    ],
+    "limitations": [
+      "SZZ algorithm heuristics can carry up to 15-20% label noise from cosmetic refactoring.",
+      "Historical desktop/C/Java projects may have different churn dynamics than modern TypeScript microservices.",
+      "Predictions represent empirical regression risk probability, NOT guaranteed bug certainty or security vulnerability proof."
     ]
   }
 }

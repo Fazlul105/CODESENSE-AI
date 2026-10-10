@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FolderGit2, Search, ExternalLink, GitPullRequest, ArrowRight, Loader2 } from 'lucide-react';
 
+import { getRepoPulls } from '@/lib/api';
+
 export default function RepositoriesPage() {
   const router = useRouter();
   const [repoInput, setRepoInput] = useState('');
@@ -17,13 +19,8 @@ export default function RepositoriesPage() {
     setIsLoadingPulls(true);
     setError(null);
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
-      const res = await fetch(`${apiBase}/repositories/${owner}/${repo}/pulls?state=open`);
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to fetch pull requests');
-      }
-      setPulls(data.data || []);
+      const data = await getRepoPulls(owner, repo, 'open');
+      setPulls(data || []);
       setOwnerRepo({ owner, repo });
     } catch (err: any) {
       setError(err.message);

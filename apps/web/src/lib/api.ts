@@ -1,10 +1,11 @@
 import { AnalysisJob, ReviewFinding, AnalysisReport, ApiResponse } from '@codesense/shared';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
@@ -16,6 +17,43 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     throw new Error(json.error || `Request failed with status ${res.status}`);
   }
   return json.data !== undefined ? json.data : json;
+}
+
+export async function getCurrentUser(): Promise<{
+  isAuthenticated: boolean;
+  user: {
+    id: string;
+    githubId: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string;
+    email?: string;
+  } | null;
+  message?: string;
+}> {
+  return fetchJson(`${API_BASE}/auth/me`);
+}
+
+export async function logoutUser(): Promise<{ success: boolean; message: string }> {
+  return fetchJson(`${API_BASE}/auth/logout`, { method: 'POST' });
+}
+
+export async function devLogin(username?: string): Promise<any> {
+  return fetchJson(`${API_BASE}/auth/dev-login`, {
+    method: 'POST',
+    body: JSON.stringify({ username }),
+  });
+}
+
+export async function exchangeOAuthCode(code: string, state?: string): Promise<any> {
+  return fetchJson(`${API_BASE}/auth/callback`, {
+    method: 'POST',
+    body: JSON.stringify({ code, state }),
+  });
+}
+
+export async function getRepoPulls(owner: string, repo: string, state = 'open'): Promise<any[]> {
+  return fetchJson(`${API_BASE}/repositories/${owner}/${repo}/pulls?state=${state}`);
 }
 
 export async function createAnalysis(pullRequestUrl: string, enableLLM = true): Promise<{

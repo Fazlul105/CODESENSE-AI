@@ -23,7 +23,15 @@ export const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.API_PORT || '5001', 10),
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  allowedOrigins: (process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+    : [
+        process.env.FRONTEND_URL || 'http://localhost:3000',
+        'https://codesense-ai-iota.vercel.app',
+      ]
+  ).filter(Boolean),
   mongodbUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/codesense_ai',
+  allowMemoryDb: process.env.ALLOW_MEMORY_DB === 'true',
   github: {
     clientId: process.env.GITHUB_CLIENT_ID || '',
     clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
@@ -45,5 +53,8 @@ export const config = {
     maxFilesPerPr: 50,
     maxFileSizeBytes: 500 * 1024, // 500KB per file
     analysisTimeoutMs: 120 * 1000, // 2 minutes
-  }
+    maxChatRequestsPerMinute: 20,
+    maxAnalysesPerHourAnonymous: 10,
+    maxAnalysesPerHourUser: 60,
+  },
 };

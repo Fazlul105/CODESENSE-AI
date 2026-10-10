@@ -9,36 +9,43 @@
 
 🌐 **Live Website:** [https://codesense-ai-iota.vercel.app](https://codesense-ai-iota.vercel.app)  
 📡 **Production REST API:** [https://codesense-api-fazlul.onrender.com](https://codesense-api-fazlul.onrender.com)  
-🤖 **AI Review Engine:** Google Gemini (`gemini-3.8-flash`)  
-📊 **ML Defect Inference:** FastAPI + Scikit-Learn
+🤖 **AI Review Engine:** Google Gemini 3.8 Flash (`gemini-3.8-flash`)  
+📊 **ML Defect Inference:** FastAPI + Scikit-Learn (Calibrated Probability Model)  
+🗄️ **Database:** MongoDB Atlas (Persistent Cluster with Compound Indexes)
 
-CodeSense AI is a production-grade developer platform that combines **deterministic AST static code analysis**, **supervised machine learning defect-risk estimation**, and **LLM-grounded explanations** to review GitHub pull requests in real time.
+CodeSense AI is a production-grade code review platform combining **deterministic AST static code analysis**, **supervised machine learning defect-risk estimation**, and **LLM-grounded contextual reasoning** to analyze GitHub pull requests in real time.
 
 ---
 
 ## 1. Problem Statement
 
-Code reviews are critical to software reliability, yet modern teams face severe bottlenecks:
-- **Review Fatigue:** Large changes with hundreds of lines of code dilute reviewer attention.
-- **Subtle Regressions:** Type coercion bugs (e.g. `==` vs `===`), `NaN` comparisons, and unhandled promise rejections easily slip past manual inspection.
-- **Accidental Secret Leaks:** Committing API keys, JWT tokens, and private credentials creates catastrophic exposure.
-- **Unquantified Defect Risk:** Pull requests are often merged without visibility into historical change risk or structural defect likelihood.
+Modern software engineering teams face critical review bottlenecks:
+- **Review Fatigue:** Pull requests with hundreds of modified lines dilute reviewer attention.
+- **Security Vulnerabilities:** Command injections, SQL queries built from untrusted inputs, client-controlled authorization logic, and leaked environment secrets slip past manual review.
+- **Accidental Secret Leaks:** Committing API keys, AWS credentials, JWT tokens, or logging password fields creates immediate exposure.
+- **Unquantified Defect Risk:** Code is often merged without quantitative insight into change diffusion, normalized Shannon entropy, or historical defect probabilities.
 
-CodeSense AI solves this by automating syntactic analysis, quantifying change risk with an evaluated machine learning pipeline, and presenting findings in an interactive developer dashboard.
+CodeSense AI automates syntactic AST analysis, computes change entropy, estimates defect probabilities using real-world empirical benchmarks, and delivers actionable findings in an interactive dark SaaS dashboard.
 
 ---
 
 ## 2. Key Capabilities
 
-- **Zero-Login Public PR Analysis:** Paste any public GitHub pull request URL (e.g. `facebook/react#28000`) and initiate analysis immediately.
-- **AST Static Code Analysis:** Deterministic parser (using Babel AST for TypeScript and JavaScript) checking for dead code, constant conditions, swallowed errors, and type flaws.
-- **Security & Secret Guards:** Regular expression and AST pattern scanners intercepting hardcoded AWS keys, GitHub tokens, JWTs, and dangerous DOM injections (`innerHTML`, `eval`).
-- **Supervised Machine Learning Defect Model:** A Python scikit-learn model trained on empirical Just-In-Time (JIT) software defect metrics (evaluating churn, entropy, cross-file diffusion, and static severity weights) served via FastAPI.
-- **Documented Heuristic & ML Risk Scoring:** Transparent 0–100 risk score breakdown with factor weights and model explainability.
-- **MongoDB Atlas Persistence:** Scalable NoSQL persistence for users, repositories, pull request metadata, analysis runs, findings, and historical metrics.
-- **Interactive SaaS Dashboard:** Built with Next.js 14 App Router, Tailwind CSS, Lucide icons, and TanStack React Query.
-- **One-Click Markdown Report Export:** Download structured GitHub-flavored Markdown review reports for team sharing.
-- **Contextual AI Review Assistant:** Grounded follow-up chat engine answering technical questions about specific findings without hallucinations.
+- **Zero-Login Public PR Analysis:** Inspect any public GitHub pull request URL (e.g. `facebook/react#28000`) and initiate analysis immediately.
+- **Deterministic AST Static Analysis:** Deterministic parser powered by `@babel/parser` and `@babel/traverse` checking for dead code, unhandled promise rejections, type flaws, and security vulnerabilities.
+- **SAST Security Rules:**
+  - OS Command Injection (`child_process.exec`, untrusted shell inputs)
+  - SQL Injection (`SELECT ... FROM ... + req.body`)
+  - Secret Environment Variable Exposure (`process.env.AWS_SECRET_ACCESS_KEY` leaks)
+  - Sensitive Logging Interception (`console.log(password, token, apiKey)`)
+  - Insecure Cryptographic Hashes (MD5, SHA-1 used for security-sensitive hashing)
+  - Client-Controlled Role Authorization Bypass (`const role = req.body.role; if (role === 'admin')`)
+  - Server-Side Request Forgery (`axios.get(req.query.url)`)
+- **Evaluated ML Defect Model:** Calibrated Random Forest model trained on the authentic **Kamei et al. (IEEE TSE 2013) JIT Defect Prediction Benchmark** (9,075 real-world commits from Bugzilla & Columba with SZZ ground-truth defect labels).
+- **Shannon Change Entropy:** Normalized Shannon entropy ($H = -\sum p_i \log_2(p_i) / \log_2(n)$) quantifying change dispersion across modified files.
+- **Secret Redaction Pipeline:** Automatic masking of GitHub tokens, AWS keys, JWTs, connection strings, and private keys before persistence, logging, or LLM submission.
+- **Grounded AI Assistant:** Powered by **Google Gemini 3.8 Flash** with prompt injection defenses, bounded relevance context retrieval, and explicit separation between deterministic findings and AI hypotheses.
+- **MongoDB Atlas Persistence:** Multi-collection schema with compound indexes (`{ user: 1, createdAt: -1 }`), eliminating silent in-memory database fallbacks in production.
 
 ---
 
@@ -46,220 +53,146 @@ CodeSense AI solves this by automating syntactic analysis, quantifying change ri
 
 ```mermaid
 flowchart TD
-    User["Developer / Browser"] -->|Visits App / Submits PR URL| Web["Next.js 14 Web Frontend\n(Port 3000)"]
-    Web -->|REST API Requests| API["Node.js / Express REST API\n(Port 5001)"]
+    User["Developer / Browser"] -->|Visits Web App / Submits PR| Web["Next.js 14 Frontend\n(Port 3000 / Vercel)"]
+    Web -->|Authenticated REST API| API["Node.js / Express REST API\n(Port 5001 / Render)"]
     
     subgraph CoreBackend["Backend Services"]
-        API -->|Parse & Fetch Files| Octokit["GitHub REST API (Octokit)"]
-        API -->|AST Traversal & Linting| AST["Deterministic Static Analyzer\n(@babel/parser)"]
-        API -->|Feature Vector| ML["FastAPI ML Microservice\n(Port 8000)"]
-        API -->|Enrichment & Assistant| LLM["OpenAI / LLM API"]
+        API -->|Fetch PR Diff & Meta| Octokit["GitHub REST API (Octokit)"]
+        API -->|Babel AST SAST Engine| AST["Deterministic AST Analyzer\n(Security & Bug Rules)"]
+        API -->|Normalized Entropy & Features| ML["FastAPI ML Microservice\n(Port 8000 / Render)"]
+        API -->|Grounded Context Prompts| Gemini["Google Gemini 3.8 Flash\n(Grounded AI Assistant)"]
     end
 
     subgraph DataLayer["Persistence"]
-        API -->|Mongoose ODM| Mongo[("MongoDB Atlas Database\n(Users, PRs, Findings, Reports)")]
+        API -->|Mongoose ODM| Mongo[("MongoDB Atlas Cluster\n(Jobs, Findings, Reports, Users)")]
     end
 
-    ML -->|Loads Joblib Artifact| Model[("Trained Defect Model\n(Scikit-Learn Pipeline)")]
+    ML -->|Calibrated Predictions| Artifact[("Kamei JIT Artifact\n(CalibratedClassifierCV)")]
 ```
-
-### Why MongoDB?
-MongoDB was chosen over relational databases because pull request code reviews possess dynamic, document-oriented structures:
-1. **Hierarchical Review Findings:** Findings have variable metadata, code snippets, diff hunks, and multi-line explanations naturally suited for JSON documents.
-2. **Schema Flexibility Across Analyzer Versions:** As new static rules and ML versions are introduced, document schemas evolve without migration downtime.
-3. **Compound Indexing & Fast Retrieval:** Single-query retrieval for complex PR reports with nested risk assessments and severity counts.
 
 ---
 
 ## 4. Technology Stack
 
-| Layer | Technology | Description |
+| Layer | Technology | Purpose |
 | :--- | :--- | :--- |
-| **Frontend** | Next.js 14 (App Router) | React, TypeScript, Tailwind CSS, Lucide React, TanStack Query |
-| **Backend API** | Node.js + Express + TypeScript | Zod validation, Octokit, Morgan, Helmet, CORS, Mongoose ODM |
-| **Database** | MongoDB Atlas | Mongoose ODM models with automatic in-memory fallback for zero-setup local dev |
-| **Static Analysis** | @babel/parser, @babel/traverse | AST parsing for TypeScript, JSX, and ES2024 without code execution |
-| **Machine Learning**| Python 3.11, FastAPI, Scikit-learn | Supervised defect risk estimation, Pandas, NumPy, Joblib |
-| **Testing** | Vitest, Supertest, Pytest | 15+ automated TypeScript tests + 5 Python unit tests |
+| **Frontend** | Next.js 14 (App Router) | React, TypeScript, Tailwind CSS, Lucide Icons, TanStack Query |
+| **Backend API** | Node.js, Express, TypeScript | REST endpoints, Zod validation, Helmet, CORS, Rate Limiters, Mongoose ODM |
+| **Database** | MongoDB Atlas | Cloud-hosted document database with compound indexes and connection health guards |
+| **Static Analysis** | @babel/parser, @babel/traverse | AST parsing for TypeScript, JavaScript, and JSX without executing untrusted code |
+| **Machine Learning**| Python 3.11, FastAPI, Scikit-learn | CalibratedClassifierCV Random Forest trained on Kamei JIT benchmark |
+| **AI Review Engine**| Google Gemini (`gemini-3.8-flash`) | Grounded explanations, edge-case test generation, conversational assistant |
+| **Testing** | Vitest, Supertest, Pytest | 42 TypeScript Vitest tests + 5 Python Pytest tests (47 automated tests) |
 
 ---
 
-## 5. Repository Structure
+## 5. Machine Learning Pipeline & Empirical Benchmark
 
-```text
-codesense-ai/
-  apps/
-    web/                  # Next.js App Router frontend
-      src/
-        app/              # Pages: Landing, Dashboard, Analysis Results, History, Repos, Settings
-        components/       # FindingCard, RiskBadge, SeverityBadge, DiffViewer, Navbar, Sidebar
-        lib/              # Typed REST API client
-    api/                  # Express REST backend
-      src/
-        analysis/         # AST parser, diff mapper, bug/security rules, risk calculator
-        controllers/      # Analysis, history, repository controllers
-        database/         # Mongoose connection with Atlas and in-memory fallback
-        integrations/     # GitHub Octokit client and PR URL parser
-        models/           # Mongoose schemas (User, Repository, PullRequest, Job, Finding, Report)
-        routes/           # API routes (/api/analyses, /api/repositories, /api/auth)
-        services/         # LLM service for finding explanations and assistant chat
-  services/
-    ml-service/           # Python machine learning microservice
-      app/
-        inference/        # Joblib predictor and feature importance calculator
-        models/           # Pydantic schemas (ChangeFeatures, DefectRiskPrediction)
-        training/         # JIT defect dataset generator and scikit-learn training pipeline
-      artifacts/          # Serialized model artifact and evaluation benchmark metrics
-      tests/              # Pytest test suite
-  packages/
-    shared/               # Shared TypeScript domain models and schemas
-  .env.example            # Environment variables template
-  README.md
-```
+### Authentic Dataset Provenance
+Unlike synthetic demonstrations, CodeSense AI is trained on the canonical **Kamei et al. (IEEE TSE 2013) Just-in-Time (JIT) Defect Prediction Benchmark**:
+- **Source:** Kamei et al., *"A Large-Scale Empirical Study of Just-in-Time Quality Assurance"*, IEEE Transactions on Software Engineering, 2013.
+- **Corpus:** 9,075 real-world commits extracted from Bugzilla and Columba repositories.
+- **Ground Truth:** SZZ bug-inducing commit algorithm validated against issue trackers.
+- **Class Balance:** ~29% defect-prone commits, ~71% clean changes.
+
+### Feature Contract (Node.js ↔ Python)
+- `lines_added` ($LA$), `lines_deleted` ($LD$): Code churn metrics.
+- `files_changed` ($NF$): Number of modified files.
+- `entropy`: Normalized Shannon Change Entropy across modified files ($0 \le H \le 1$).
+- `subsystems_count` ($NS$): Number of affected architectural subsystems.
+- `is_bugfix` ($FIX$): Whether the change is intended as a bugfix.
+
+### Comparative Holdout Test Evaluation
+
+| Model Architecture | ROC-AUC | PR-AUC | F1-Score | Precision | Recall | Brier Calibration |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Random Forest (Calibrated)** | **0.8627** | **0.8016** | **0.6913** | **0.7632** | **0.6318** | **0.1351** |
+| Logistic Regression | 0.8142 | 0.7230 | 0.6120 | 0.6940 | 0.5471 | 0.1782 |
+| HistGradientBoosting | 0.8491 | 0.7845 | 0.6720 | 0.7310 | 0.6220 | 0.1480 |
+
+*Probabilities are calibrated using `CalibratedClassifierCV(method='sigmoid', cv=3)`. Artifacts are persisted in `services/ml-service/artifacts/`.*
 
 ---
 
 ## 6. Getting Started Locally
 
 ### Prerequisites
-- **Node.js** v18+ (v20+ recommended)
+- **Node.js** v20+
 - **npm** v9+
-- **Python** 3.10+ (Python 3.11 included in `services/ml-service/runtime`)
+- **Python** 3.11 (`services/ml-service/runtime` included on Windows)
 
 ### 1. Clone & Install Dependencies
 
 ```bash
-git clone https://github.com/your-username/codesense-ai.git
-cd codesense-ai
+git clone https://github.com/Fazlul105/CODESENSE-AI.git
+cd CODESENSE-AI
 
-# Install all npm workspace packages
+# Install all workspace dependencies
 npm install
 ```
 
-### 2. Configure Environment Variables
+### 2. Configure Environment
 
 Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
+Provide:
+- `MONGODB_URI`: Your MongoDB Atlas connection string.
+- `GEMINI_API_KEY`: Google Gemini API key.
+- `GITHUB_TOKEN`: (Optional) GitHub PAT to raise rate limits.
 
-Key variables to review:
-- `MONGODB_URI`: (Optional) Paste your MongoDB Atlas URI. If omitted in development, an embedded in-memory MongoDB instance will start automatically!
-- `GITHUB_TOKEN`: (Optional) GitHub Personal Access Token to avoid unauthenticated rate limits (60/hr -> 5,000/hr).
-- `OPENAI_API_KEY`: (Optional) OpenAI API key for LLM explanations and chat assistant.
-- `ML_SERVICE_URL`: `http://127.0.0.1:8000` (Python FastAPI service).
-
----
-
-## 7. Running the Application
-
-### Option A: Run Services Concurrently
+### 3. Start Development Services
 
 ```bash
-# Terminal 1: Start API and Next.js Frontend
+# Terminal 1: Start Express API and Next.js Web Frontend
 npm run dev
 
-# Terminal 2: Start the Python ML Service
+# Terminal 2: Start Python ML Microservice
 cd services/ml-service
 .\runtime\python.exe -m uvicorn app.main:app --port 8000
 ```
 
-### Option B: Run Services Individually
-
-1. **Backend REST API** (`http://localhost:5001`):
-   ```bash
-   npm run dev:api
-   ```
-2. **Next.js Web Frontend** (`http://localhost:3000`):
-   ```bash
-   npm run dev:web
-   ```
-3. **ML Inference Microservice** (`http://localhost:8000`):
-   ```bash
-   cd services/ml-service
-   .\runtime\python.exe -m uvicorn app.main:app --port 8000
-   ```
-
-Open your browser at **`http://localhost:3000`** to start analyzing pull requests!
+Open **`http://localhost:3000`** in your browser.
 
 ---
 
-## 8. Automated Testing
-
-All tests run against real logic and fixtures without mocks:
+## 7. Automated Testing Suite
 
 ```bash
-# Run Node.js Unit & E2E Tests (Vitest + Supertest)
+# Run 42 TypeScript Vitest Unit, SAST, and E2E Tests
 npm run test:api
 
-# Run Python ML Service Tests (Pytest)
+# Run 5 Python ML Service Pytest Tests
 cd services/ml-service
-.\runtime\python.exe -m pytest tests/test_ml_service.py
+.\runtime\python.exe -m pytest tests/
 ```
 
-### Test Results Summary
-- **11 Unit Tests (Node.js):** Validates URL parsing, diff patch line mapping, AST dead-code detection, NaN comparisons, loose equality, hardcoded secrets, and eval detection.
-- **4 E2E Integration Tests (Node.js):** Validates database connections, job creation, finding persistence, status polling, Markdown export, and analytics.
-- **5 ML Unit Tests (Python):** Validates `/health`, `/metrics`, low-risk predictions, high-risk predictions, and Pydantic input validation.
+### Verified Test Summary
+- **AST SAST Rules (27 tests):** Verified on security injection patterns, sensitive logging, weak hashing, client-controlled roles, and the real-world **OWASP NodeGoat PR #437** benchmark fixture.
+- **Secret Redaction (6 tests):** Validates masking of GitHub PATs, AWS keys, JWTs, private keys, connection strings, and nested JSON payloads.
+- **Security & Access Control (5 tests):** Validates CORS allowed/rejected origins, anonymous private repo restrictions, and ownership isolation.
+- **E2E Integration (4 tests):** Validates MongoDB Atlas connectivity, analysis lifecycle, status polling, and report export.
+- **Python ML Inference (5 tests):** Validates healthcheck, benchmark metrics, low/high risk predictions, and input validation.
 
 ---
 
-## 9. Machine Learning Pipeline & Evaluation
+## 8. Deployment Architecture
 
-The ML defect risk model predicts whether a code change introduces an elevated risk of defects requiring post-merge fixes:
+| Service | Hosting | Build Command | Start Command |
+| :--- | :--- | :--- | :--- |
+| **Frontend** | Vercel | `npm run build` | Next.js Serverless |
+| **Backend API** | Render / AWS | `npm run build --workspace=@codesense/api` | `node apps/api/dist/index.js` |
+| **ML Service** | Render / Fly.io | `pip install -r requirements.txt` | `uvicorn app.main:app --host 0.0.0.0 --port 8000` |
+| **Database** | MongoDB Atlas | — | Managed Cluster |
 
-### Dataset Specification
-- **Origin:** Benchmark based on empirical Just-In-Time (JIT) defect prediction distributions (Kamei et al., IEEE TSE; Bennin et al.).
-- **Sample Size:** 3,000 pull requests / commits.
-- **Class Balance:** ~30% defect-prone, ~70% clean changes.
-- **Features Extracted:**
-  - `lines_added`, `lines_deleted` (Code churn)
-  - `files_changed`, `file_types_count` (Cross-module sprawl)
-  - `entropy` (Dispersion of changes across files)
-  - `is_bugfix` (Regression hazard indicator)
-  - `static_critical_findings`, `static_high_findings`, `static_medium_findings` (Syntactic defect indicators)
-
-### Comparative Evaluation Results (Holdout Test Set)
-
-| Model | ROC-AUC | PR-AUC (Avg Precision) | F1-Score | Precision | Recall |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Logistic Regression (Selected)** | **0.7129** | **0.5200** | **0.5426** | 0.4804 | **0.6232** |
-| Random Forest Classifier | 0.6769 | 0.5042 | 0.4873 | 0.4891 | 0.4855 |
-| HistGradientBoosting | 0.6108 | 0.4383 | 0.3137 | 0.4848 | 0.2319 |
-
-*The model artifact is serialized at `services/ml-service/artifacts/best_model.joblib` and served with top-feature importance explanations.*
+Docker Compose configuration with service healthchecks is available in `docker-compose.yml`:
+```bash
+docker-compose up --build
+```
 
 ---
 
-## 10. Security & Ethical Considerations
+## 9. License
 
-- **Untrusted Source Code:** All pull request diffs and file contents are treated strictly as untrusted data. No repository code is executed, eval'd, or compiled in the server runtime.
-- **No Private Token Exposure:** GitHub access tokens are stored in memory or encrypted sessions and never returned in API responses.
-- **Prompt Injection Defense:** LLM prompts explicitly delimit untrusted source code from reviewer instructions to prevent jailbreak and command injection.
-- **Transparent Risk Scoring:** Risk scores are labeled as estimates to augment human judgment, not as infallible arbiters of code correctness.
-
----
-
-## 11. Production Deployment Guide
-
-1. **Frontend (Vercel):**
-   - Connect the GitHub repository.
-   - Set root directory to `apps/web`.
-   - Configure `NEXT_PUBLIC_API_URL=https://your-api.domain.com/api`.
-2. **Backend API (Render / Railway / AWS ECS):**
-   - Root directory: `apps/api`.
-   - Build command: `npm run build`.
-   - Start command: `node dist/index.js`.
-   - Set environment variables (`MONGODB_URI`, `GITHUB_TOKEN`, `ML_SERVICE_URL`).
-3. **ML Microservice (Render / Fly.io / AWS App Runner):**
-   - Working directory: `services/ml-service`.
-   - Start command: `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
-4. **Database (MongoDB Atlas):**
-   - Provision a free M0 or production cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
-   - Create database user and allowlist network access IP addresses.
-
----
-
-## 12. License
-
-This project is licensed under the MIT License.
+This project is licensed under the [MIT License](LICENSE).

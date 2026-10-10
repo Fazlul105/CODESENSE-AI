@@ -194,8 +194,8 @@ export default function AnalysisResultsPage() {
         </div>
       )}
 
-      {/* Metric Breakdown Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+      {/* Metric Breakdown Grid (All 5 severities + Informational + Files Analyzed) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3.5">
           <p className="text-xs text-slate-400 font-medium">Total Findings</p>
           <p className="text-xl font-bold text-slate-100 mt-1">{report?.findingsCount?.total || findings.length}</p>
@@ -216,27 +216,98 @@ export default function AnalysisResultsPage() {
           <p className="text-xs text-blue-400 font-medium">Low</p>
           <p className="text-xl font-bold text-blue-300 mt-1">{report?.findingsCount?.low || 0}</p>
         </div>
+        <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 p-3.5">
+          <p className="text-xs text-slate-400 font-medium">Informational</p>
+          <p className="text-xl font-bold text-slate-300 mt-1">{report?.findingsCount?.informational || 0}</p>
+        </div>
         <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3.5">
           <p className="text-xs text-slate-400 font-medium">Files Analyzed</p>
-          <p className="text-xl font-bold text-slate-100 mt-1">{job.filesAnalyzed}</p>
+          <p className="text-xl font-bold text-slate-100 mt-1">
+            {job.filesAnalyzed}
+            {job.totalFilesChanged && job.totalFilesChanged > job.filesAnalyzed && (
+              <span className="text-xs text-slate-500 font-normal ml-1">/ {job.totalFilesChanged}</span>
+            )}
+          </p>
         </div>
       </div>
 
-      {/* Risk Assessment & Methodology Card */}
+      {/* Partial-Analysis / Coverage Notice if files were skipped */}
+      {job.totalFilesChanged && job.filesAnalyzed < job.totalFilesChanged ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Info className="h-4 w-4 text-amber-400 shrink-0" />
+            <span>
+              <strong>Analysis Coverage Notice:</strong> {job.filesAnalyzed} of {job.totalFilesChanged} changed files analyzed. Non-JavaScript/TypeScript, binary, or configuration files were skipped for AST parsing.
+            </span>
+          </div>
+          <span className="font-mono text-[11px] bg-amber-500/20 px-2.5 py-1 rounded text-amber-200 shrink-0">
+            {Math.round((job.filesAnalyzed / job.totalFilesChanged) * 100)}% Codebase Coverage
+          </span>
+        </div>
+      ) : null}
+
+      {/* Risk Assessment & Methodology: Separates Heuristic Churn Risk from Validated ML Estimation */}
       {report?.riskAssessment && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-blue-400" />
-              <h3 className="text-sm font-semibold text-slate-200">Defect Risk Assessment</h3>
-              <span className="text-[11px] rounded bg-slate-800 px-2 py-0.5 text-slate-400 font-mono">
-                Method: {report.riskAssessment.method === 'ml_model' ? 'ML Scikit-Learn Model' : 'Documented Heuristic'}
-              </span>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-200">Defect Risk & Change Analysis</h3>
+                <p className="text-[11px] text-slate-400">
+                  Dual-tier assessment combining code churn heuristics with real-world ML defect probability.
+                </p>
+              </div>
             </div>
             <RiskBadge level={report.riskAssessment.riskLevel} score={report.riskAssessment.overallScore} size="lg" />
           </div>
 
           <p className="text-xs text-slate-300 leading-relaxed">{report.riskAssessment.summary}</p>
+
+          {/* Dual Panel: Heuristic Churn vs Validated ML Model */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+            {/* Heuristic Code-Change Risk Panel */}
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-blue-400" />
+                  Heuristic Change-Risk Score
+                </span>
+                <span className="text-xs font-mono font-bold text-blue-400">
+                  {report.riskAssessment.overallScore}/100
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                Calculated from normalized lines added/deleted, file count diffusion, and normalized Shannon Change Entropy across modified files.
+              </p>
+            </div>
+
+            {/* Validated ML Defect-Risk Estimate Panel */}
+            <div className="rounded-lg border border-indigo-950/60 bg-indigo-950/20 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-indigo-300 flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                  Experimental ML Defect-Risk Estimate
+                </span>
+                {report.riskAssessment.mlDetails ? (
+                  <span className="text-xs font-mono font-bold text-indigo-300">
+                    {(report.riskAssessment.mlDetails.defectProbability * 100).toFixed(1)}% Prob.
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-slate-500 font-mono">Heuristic Baseline</span>
+                )}
+              </div>
+              <p className="text-[11px] text-indigo-200/70 leading-normal">
+                {report.riskAssessment.mlDetails ? (
+                  <>
+                    Calibrated {report.riskAssessment.mlDetails.modelType} trained on Kamei et al. (IEEE TSE 2013) JIT Defect Benchmark (9,075 real-world commits with SZZ labels).
+                  </>
+                ) : (
+                  'ML microservice offline — falling back to deterministic heuristic evaluation.'
+                )}
+              </p>
+            </div>
+          </div>
 
           {/* Risk Factors Breakdown */}
           {report.riskAssessment.factors && report.riskAssessment.factors.length > 0 && (
@@ -377,12 +448,17 @@ export default function AnalysisResultsPage() {
           </div>
 
           {findingsToDisplay.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center">
-              <CheckCircle className="mx-auto h-8 w-8 text-emerald-400 mb-2" />
-              <h4 className="text-sm font-medium text-slate-200">No findings matching active filters</h4>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                No bugs or security violations detected for the selected criteria in this pull request.
-              </p>
+            <div className="rounded-xl border border-dashed border-slate-800 bg-slate-900/30 p-10 text-center space-y-3">
+              <CheckCircle className="mx-auto h-8 w-8 text-emerald-400" />
+              <div>
+                <h4 className="text-sm font-medium text-slate-200">No findings matching active criteria</h4>
+                <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+                  No static analysis violations or potential bugs detected for these filter settings.
+                </p>
+              </div>
+              <div className="rounded-md bg-slate-950/80 border border-slate-800/80 p-3 text-[11px] text-slate-400 max-w-lg mx-auto text-left leading-relaxed">
+                <span className="font-semibold text-slate-300">Important Engineering Note:</span> Zero AST static analysis findings does not guarantee that the pull request is free of security vulnerabilities, runtime edge cases, or functional regressions. Always complement with automated test suites and peer code reviews.
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -394,18 +470,19 @@ export default function AnalysisResultsPage() {
 
           {/* AI Contextual Assistant Chat Section */}
           <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 mt-6 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="rounded-lg bg-indigo-500/10 p-2 text-indigo-400">
                   <Bot className="h-5 w-5" />
                 </div>
                 <div>
                   <h4 className="text-sm font-semibold text-slate-200">Contextual Review Assistant</h4>
-                  <p className="text-[11px] text-slate-400">Ask questions grounded in this PR&apos;s findings, AST rules, and risk assessment.</p>
+                  <p className="text-[11px] text-slate-400">Ask questions grounded in this PR&apos;s findings, AST rules, and calibrated risk assessment.</p>
                 </div>
               </div>
-              <span className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-[10px] font-semibold text-indigo-400 border border-indigo-500/20">
-                Grounded Assistant
+              <span className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-indigo-500/10 px-3 py-1 text-[10px] font-semibold text-indigo-300 border border-indigo-500/30">
+                <Sparkles className="h-3 w-3 text-indigo-400" />
+                Gemini 3.8 Flash • Grounded Context
               </span>
             </div>
 

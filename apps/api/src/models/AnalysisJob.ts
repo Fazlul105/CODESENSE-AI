@@ -46,5 +46,7 @@ const AnalysisJobSchema = new Schema<IAnalysisJob>(
 );
 
 AnalysisJobSchema.index({ createdAt: -1 });
+AnalysisJobSchema.index({ user: 1, createdAt: -1 });
+AnalysisJobSchema.index({ repository: 1, createdAt: -1 });
 
 export const AnalysisJob = mongoose.model<IAnalysisJob>('AnalysisJob', AnalysisJobSchema);

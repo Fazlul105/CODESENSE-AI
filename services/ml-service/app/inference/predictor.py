@@ -74,15 +74,49 @@ class DefectRiskPredictor:
         is_defect_prone = prob_defect >= 0.50
         confidence = float(max(probs[0], probs[1]))
 
-        # Calculate top contributing features for explainability
-        contributions: List[FeatureContribution] = []
-        for feat_name, imp in sorted(self.feature_importances.items(), key=lambda x: x[1], reverse=True)[:4]:
-            val = getattr(features, feat_name, None)
-            contributions.append(FeatureContribution(
-                feature=feat_name,
-                impact=f"Value: {val} (Weight: {imp})",
-                importance=imp
-            ))
+        # Calculate local contributing features for explainability based on PR-specific metrics
+        local_scored: List[Dict[str, Any]] = []
+        for feat_name in self.feature_columns:
+            val = float(getattr(features, feat_name, 0.0) or 0.0)
+            imp = self.feature_importances.get(feat_name, 0.1)
+
+            # Local risk contribution score factoring in both feature magnitude and model weight
+            if feat_name in ['lines_added', 'lines_deleted']:
+                desc = "High Churn" if val > 200 else "Moderate Churn" if val > 40 else "Low Churn"
+                score = imp * (2.0 if val > 200 else 1.2 if val > 40 else 0.4)
+            elif feat_name == 'entropy':
+                desc = "High Dispersion" if val > 0.6 else "Moderate Dispersion" if val > 0.2 else "Concentrated"
+                score = imp * (1.8 if val > 0.6 else 0.9)
+            elif feat_name == 'is_bugfix':
+                desc = "Bug Fix Modification" if val == 1 else "Feature/Refactor"
+                score = imp * (1.4 if val == 1 else 0.8)
+            elif feat_name.startswith('static_'):
+                desc = f"{int(val)} finding(s)"
+                score = imp * (1.0 + val * 0.6)
+            elif feat_name == 'files_changed':
+                desc = f"{int(val)} files touched"
+                score = imp * (1.8 if val > 10 else 1.2 if val > 3 else 0.6)
+            else:
+                desc = f"Value: {val}"
+                score = imp
+
+            local_scored.append({
+                'feature': feat_name,
+                'impact': f"{desc} ({val})",
+                'importance': imp,
+                'score': score
+            })
+
+        # Rank by local contribution score
+        sorted_local = sorted(local_scored, key=lambda x: x['score'], reverse=True)[:4]
+        contributions: List[FeatureContribution] = [
+            FeatureContribution(
+                feature=item['feature'],
+                impact=item['impact'],
+                importance=item['importance']
+            )
+            for item in sorted_local
+        ]
 
         eval_summary = None
         if self.metrics:
@@ -95,8 +129,9 @@ class DefectRiskPredictor:
             )
 
         note = (
-            f"Evaluated with {self.model_name} (v{self.model_version}) on JIT defect features. "
-            "Model outputs estimated probability that the change introduces a regression requiring post-merge fix."
+            f"Evaluated with {self.model_name} (v{self.model_version}) trained on Kamei et al. (IEEE TSE 2013) JIT benchmark. "
+            "Model outputs estimated probability that the change introduces a regression based on commit churn and dispersion. "
+            "Defect risk is distinct from static security findings."
         )
 
         return DefectRiskPrediction(
