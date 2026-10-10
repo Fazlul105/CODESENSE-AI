@@ -150,17 +150,34 @@ export interface CreateAnalysisRequest {
   enableLLM?: boolean;
 }
 
+export interface ChatReference {
+  filePath: string;
+  line?: number;
+  startLine?: number;
+  endLine?: number;
+  symbolName?: string;
+  snippet?: string;
+  githubUrl?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
-  references?: Array<{
-    filePath: string;
-    line?: number;
-    snippet?: string;
-  }>;
+  references?: ChatReference[];
 }
+
+export interface RagStatusResponse {
+  enabled: boolean;
+  isIndexed: boolean;
+  status: 'not_indexed' | 'indexing' | 'indexed' | 'failed' | 'skipped_private';
+  chunkCount: number;
+  commitSha?: string;
+  indexedAt?: string;
+  embeddingModel?: string;
+}
+
 
 export interface ApiResponse<T = any> {
   success: boolean;

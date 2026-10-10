@@ -39,6 +39,14 @@ services:
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.8-flash}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ML_SERVICE_URL=http://ml-service:8000
+      - RAG_ENABLED=${RAG_ENABLED:-false}
+      - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-gemini-embedding-001}
+      - RAG_VECTOR_INDEX_NAME=${RAG_VECTOR_INDEX_NAME:-vector_index}
+      - RAG_TOP_K=${RAG_TOP_K:-6}
+      - RAG_MAX_FILES=${RAG_MAX_FILES:-30}
+      - RAG_MAX_CHUNKS=${RAG_MAX_CHUNKS:-500}
+      - RAG_MAX_CONTEXT_TOKENS=${RAG_MAX_CONTEXT_TOKENS:-6000}
+      - RAG_MAX_CONCURRENT_EMBEDDINGS=${RAG_MAX_CONCURRENT_EMBEDDINGS:-2}
     depends_on:
       ml-service:
         condition: service_healthy

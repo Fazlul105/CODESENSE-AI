@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { getAnalysis, getAnalysisFindings, getExportMarkdownUrl, askAnalysisChat } from '@/lib/api';
+import { getAnalysis, getAnalysisFindings, getExportMarkdownUrl, askAnalysisChat, getAnalysisRagStatus, triggerAnalysisRagIndex } from '@/lib/api';
 import { FindingCard } from '@/components/FindingCard';
 import { RiskBadge } from '@/components/RiskBadge';
 import { SeverityBadge } from '@/components/SeverityBadge';
@@ -26,6 +26,8 @@ import {
   Send,
   Bot,
   Sparkles,
+  Database,
+  BookOpen,
 } from 'lucide-react';
 
 export default function AnalysisResultsPage() {
@@ -38,7 +40,22 @@ export default function AnalysisResultsPage() {
 
   // AI Assistant Chat State
   const [chatQuestion, setChatQuestion] = useState('');
-  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; text: string; time: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<
+    Array<{
+      role: 'user' | 'assistant';
+      text: string;
+      time: string;
+      references?: Array<{
+        filePath: string;
+        startLine?: number;
+        endLine?: number;
+        symbolName?: string;
+        snippet?: string;
+        githubUrl?: string;
+      }>;
+      ragUsed?: boolean;
+    }>
+  >([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
   async function handleSendChat(e?: React.FormEvent, customPrompt?: string) {
@@ -54,7 +71,16 @@ export default function AnalysisResultsPage() {
 
     try {
       const res = await askAnalysisChat(id, userText);
-      setChatMessages((prev) => [...prev, { role: 'assistant', text: res.answer, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: res.answer,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          references: res.references,
+          ragUsed: res.ragUsed,
+        },
+      ]);
     } catch (err: any) {
       setChatMessages((prev) => [...prev, { role: 'assistant', text: `Failed to answer: ${err.message}`, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
     } finally {
@@ -81,6 +107,16 @@ export default function AnalysisResultsPage() {
         file: fileFilter,
       }),
     enabled: !!id && data?.job?.status === 'completed',
+  });
+
+  const { data: ragStatus } = useQuery({
+    queryKey: ['rag-status', id],
+    queryFn: () => getAnalysisRagStatus(id),
+    enabled: !!id && data?.job?.status === 'completed',
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'indexing' ? 2000 : false;
+    },
   });
 
   if (isLoading) {
@@ -476,23 +512,35 @@ export default function AnalysisResultsPage() {
                   <Bot className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-200">Contextual Review Assistant</h4>
-                  <p className="text-[11px] text-slate-400">Ask questions grounded in this PR&apos;s findings, AST rules, and calibrated risk assessment.</p>
+                  <h4 className="text-sm font-semibold text-slate-200">Repository-Aware AI Assistant</h4>
+                  <p className="text-[11px] text-slate-400">Ask questions about pull-request changes and related code, with evidence-backed source references.</p>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-indigo-500/10 px-3 py-1 text-[10px] font-semibold text-indigo-300 border border-indigo-500/30">
-                <Sparkles className="h-3 w-3 text-indigo-400" />
-                Gemini 3.8 Flash • Grounded Context
-              </span>
+              {ragStatus?.isIndexed ? (
+                <span className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold text-emerald-300 border border-emerald-500/30">
+                  <Database className="h-3 w-3 text-emerald-400" />
+                  RAG Active • {ragStatus.chunkCount} Chunks Indexed
+                </span>
+              ) : ragStatus?.status === 'indexing' ? (
+                <span className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-amber-500/10 px-3 py-1 text-[10px] font-semibold text-amber-300 border border-amber-500/30">
+                  <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
+                  Indexing Chunks...
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-indigo-500/10 px-3 py-1 text-[10px] font-semibold text-indigo-300 border border-indigo-500/30">
+                  <Sparkles className="h-3 w-3 text-indigo-400" />
+                  Gemini Grounded Assistant
+                </span>
+              )}
             </div>
 
             {/* Quick Prompt Pills */}
             <div className="flex flex-wrap gap-2 text-xs">
               {[
+                'Does this pull request introduce an authorization vulnerability?',
                 'Explain the highest severity issue',
-                'Are there any security vulnerabilities?',
+                'Are there any sensitive secrets or credential leaks?',
                 'What unit tests should I add for these changes?',
-                'Summarize the risk estimation for this PR',
               ].map((pill) => (
                 <button
                   key={pill}
@@ -507,20 +555,68 @@ export default function AnalysisResultsPage() {
 
             {/* Chat Message History */}
             {chatMessages.length > 0 && (
-              <div className="space-y-3 max-h-80 overflow-y-auto rounded-lg bg-slate-950/80 p-3 border border-slate-800/80">
+              <div className="space-y-3 max-h-96 overflow-y-auto rounded-lg bg-slate-950/80 p-3 border border-slate-800/80">
                 {chatMessages.map((msg, idx) => (
                   <div
                     key={idx}
                     className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                   >
                     <div
-                      className={`max-w-[85%] rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap ${
+                      className={`max-w-[90%] rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap ${
                         msg.role === 'user'
                           ? 'bg-blue-600 text-white rounded-br-none'
                           : 'bg-slate-900 text-slate-200 border border-slate-800 rounded-bl-none'
                       }`}
                     >
+                      {msg.role === 'assistant' && msg.ragUsed && (
+                        <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-emerald-400">
+                          <Database className="h-3 w-3" />
+                          <span>Grounded in retrieved source code chunks</span>
+                        </div>
+                      )}
                       {msg.text}
+
+                      {/* Verified Source Citations */}
+                      {msg.role === 'assistant' && msg.references && msg.references.length > 0 && (
+                        <div className="mt-3 pt-2.5 border-t border-slate-800 space-y-1.5">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <BookOpen className="h-3 w-3 text-indigo-400" />
+                            Verified Source References ({msg.references.length}):
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {msg.references.map((ref, rIdx) => {
+                              const repoFullName = (data?.job?.repository as any)?.fullName || 'repo';
+                              const headSha = (data?.job?.pullRequest as any)?.headSha || 'head';
+                              const lineAnchor = ref.startLine
+                                ? ref.endLine && ref.endLine !== ref.startLine
+                                  ? `#L${ref.startLine}-L${ref.endLine}`
+                                  : `#L${ref.startLine}`
+                                : '';
+                              const targetUrl =
+                                ref.githubUrl ||
+                                `https://github.com/${repoFullName}/blob/${headSha}/${ref.filePath}${lineAnchor}`;
+
+                              return (
+                                <a
+                                  key={rIdx}
+                                  href={targetUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-950 border border-slate-800 hover:border-indigo-500/60 hover:bg-slate-900 text-[10px] text-indigo-300 transition group"
+                                  title={ref.snippet || `${ref.filePath}:${ref.startLine || 1}`}
+                                >
+                                  <FileCode className="h-2.5 w-2.5 text-indigo-400 group-hover:text-indigo-300" />
+                                  <span className="font-mono">
+                                    {ref.filePath}:{ref.startLine ?? 1}
+                                    {ref.endLine && ref.endLine !== ref.startLine ? `-${ref.endLine}` : ''}
+                                  </span>
+                                  <ExternalLink className="h-2.5 w-2.5 opacity-60 group-hover:opacity-100" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <span className="text-[10px] text-slate-500 mt-1 px-1">{msg.time}</span>
                   </div>
@@ -528,7 +624,7 @@ export default function AnalysisResultsPage() {
                 {isChatLoading && (
                   <div className="flex items-center gap-2 text-xs text-slate-400 p-2">
                     <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-                    <span>Analyzing review context and findings...</span>
+                    <span>Retrieving relevant source chunks and reasoning...</span>
                   </div>
                 )}
               </div>

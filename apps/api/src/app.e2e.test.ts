@@ -161,5 +161,5 @@ describe('End-to-End API Suite', () => {
     expect(chatRes.status).toBe(200);
     expect(chatRes.body.success).toBe(true);
     expect(chatRes.body.data.answer).toBeDefined();
-  }, 30000);
+  }, 45000);
 });

@@ -49,6 +49,17 @@ export const config = {
     baseUrl: process.env.LLM_BASE_URL || 'https://api.openai.com/v1',
   },
   mlServiceUrl: process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000',
+  rag: {
+    enabled: process.env.RAG_ENABLED === 'true',
+    embeddingModel: process.env.RAG_EMBEDDING_MODEL || 'gemini-embedding-001',
+    vectorIndexName: process.env.RAG_VECTOR_INDEX_NAME || 'vector_index',
+    topK: parseInt(process.env.RAG_TOP_K || '6', 10),
+    maxFiles: parseInt(process.env.RAG_MAX_FILES || '30', 10),
+    maxChunks: parseInt(process.env.RAG_MAX_CHUNKS || '500', 10),
+    maxContextTokens: parseInt(process.env.RAG_MAX_CONTEXT_TOKENS || '6000', 10),
+    maxConcurrentEmbeddings: parseInt(process.env.RAG_MAX_CONCURRENT_EMBEDDINGS || '2', 10),
+    embeddingDimension: 768,
+  },
   limits: {
     maxFilesPerPr: 50,
     maxFileSizeBytes: 500 * 1024, // 500KB per file

@@ -44,8 +44,8 @@ CodeSense AI automates syntactic AST analysis, computes change entropy, estimate
 - **Evaluated ML Defect Model:** Calibrated Random Forest model trained on the authentic **Kamei et al. (IEEE TSE 2013) JIT Defect Prediction Benchmark** (9,075 real-world commits from Bugzilla & Columba with SZZ ground-truth defect labels).
 - **Shannon Change Entropy:** Normalized Shannon entropy ($H = -\sum p_i \log_2(p_i) / \log_2(n)$) quantifying change dispersion across modified files.
 - **Secret Redaction Pipeline:** Automatic masking of GitHub tokens, AWS keys, JWTs, connection strings, and private keys before persistence, logging, or LLM submission.
-- **Grounded AI Assistant:** Powered by **Google Gemini 3.8 Flash** with prompt injection defenses, bounded relevance context retrieval, and explicit separation between deterministic findings and AI hypotheses.
-- **MongoDB Atlas Persistence:** Multi-collection schema with compound indexes (`{ user: 1, createdAt: -1 }`), eliminating silent in-memory database fallbacks in production.
+- **Repository-Aware RAG Assistant:** Dynamic retrieval-augmented generation engine utilizing AST-aware code chunking (functions, classes, methods), Google Gemini embeddings (`gemini-embedding-001`, 768 dimensions), and hybrid Reciprocal Rank Fusion (RRF) vector & keyword search in MongoDB Atlas (`codechunks`). Grounded responses provide clickable GitHub commit references (e.g. `src/auth.ts:20-45`) while sandboxing untrusted code against prompt injection.
+- **MongoDB Atlas Persistence & Vector Search:** Multi-collection schema with compound indexes and Atlas Vector Search (`$vectorSearch` + exact cosine similarity fallback).
 
 ---
 
@@ -60,11 +60,13 @@ flowchart TD
         API -->|Fetch PR Diff & Meta| Octokit["GitHub REST API (Octokit)"]
         API -->|Babel AST SAST Engine| AST["Deterministic AST Analyzer\n(Security & Bug Rules)"]
         API -->|Normalized Entropy & Features| ML["FastAPI ML Microservice\n(Port 8000 / Render)"]
-        API -->|Grounded Context Prompts| Gemini["Google Gemini 3.8 Flash\n(Grounded AI Assistant)"]
+        API -->|Hybrid Vector & Lexical RAG| RAG["RAG Engine\n(Chunker, Gemini Embeddings, RRF)"]
+        RAG -->|Grounded Context Prompts| Gemini["Google Gemini\n(Repository-Aware Assistant)"]
     end
 
     subgraph DataLayer["Persistence"]
-        API -->|Mongoose ODM| Mongo[("MongoDB Atlas Cluster\n(Jobs, Findings, Reports, Users)")]
+        API -->|Mongoose ODM| Mongo[("MongoDB Atlas Cluster\n(Jobs, Findings, Reports, Chunks)")]
+        RAG -->|Vector Search & Chunks| Mongo
     end
 
     ML -->|Calibrated Predictions| Artifact[("Kamei JIT Artifact\n(CalibratedClassifierCV)")]
@@ -78,11 +80,14 @@ flowchart TD
 | :--- | :--- | :--- |
 | **Frontend** | Next.js 14 (App Router) | React, TypeScript, Tailwind CSS, Lucide Icons, TanStack Query |
 | **Backend API** | Node.js, Express, TypeScript | REST endpoints, Zod validation, Helmet, CORS, Rate Limiters, Mongoose ODM |
-| **Database** | MongoDB Atlas | Cloud-hosted document database with compound indexes and connection health guards |
+| **Database & Vector Search** | MongoDB Atlas | Persistent document cluster with Atlas Vector Search (`$vectorSearch` + cosine fallback) |
+| **RAG Retrieval Engine** | Babel AST Chunker + Gemini Embeddings | Hybrid semantic vector search + keyword fusion (RRF), citation validation |
+| **Embedding Model** | Google Gemini (`gemini-embedding-001`) | 768-dimensional document and query retrieval embeddings |
 | **Static Analysis** | @babel/parser, @babel/traverse | AST parsing for TypeScript, JavaScript, and JSX without executing untrusted code |
 | **Machine Learning**| Python 3.11, FastAPI, Scikit-learn | CalibratedClassifierCV Random Forest trained on Kamei JIT benchmark |
-| **AI Review Engine**| Google Gemini (`gemini-3.8-flash`) | Grounded explanations, edge-case test generation, conversational assistant |
-| **Testing** | Vitest, Supertest, Pytest | 42 TypeScript Vitest tests + 5 Python Pytest tests (47 automated tests) |
+| **AI Review Engine**| Google Gemini (`gemini-3.8-flash` / `gemini-3.5-flash`) | Grounded explanations, edge-case test generation, repository-aware assistant |
+| **Testing** | Vitest, Supertest, Pytest | 52 TypeScript Vitest tests + 5 Python Pytest tests (57 automated tests) |
+
 
 ---
 
@@ -160,7 +165,7 @@ Open **`http://localhost:3000`** in your browser.
 ## 7. Automated Testing Suite
 
 ```bash
-# Run 42 TypeScript Vitest Unit, SAST, and E2E Tests
+# Run 52 TypeScript Vitest Unit, SAST, RAG, and E2E Tests
 npm run test:api
 
 # Run 5 Python ML Service Pytest Tests
@@ -170,6 +175,7 @@ cd services/ml-service
 
 ### Verified Test Summary
 - **AST SAST Rules (27 tests):** Verified on security injection patterns, sensitive logging, weak hashing, client-controlled roles, and the real-world **OWASP NodeGoat PR #437** benchmark fixture.
+- **RAG Engine & Vector Search (10 tests):** Validates AST function/class extraction, line number preservation, secret redaction, cosine similarity fallback, citation validation, and anti-prompt-injection sandboxing.
 - **Secret Redaction (6 tests):** Validates masking of GitHub PATs, AWS keys, JWTs, private keys, connection strings, and nested JSON payloads.
 - **Security & Access Control (5 tests):** Validates CORS allowed/rejected origins, anonymous private repo restrictions, and ownership isolation.
 - **E2E Integration (4 tests):** Validates MongoDB Atlas connectivity, analysis lifecycle, status polling, and report export.

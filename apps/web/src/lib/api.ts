@@ -120,12 +120,45 @@ export function getExportMarkdownUrl(analysisId: string): string {
   return `${API_BASE}/analyses/${analysisId}/export`;
 }
 
-export async function askAnalysisChat(id: string, question: string): Promise<{ answer: string; timestamp: string }> {
+export interface ChatResponse {
+  answer: string;
+  timestamp: string;
+  references?: Array<{
+    filePath: string;
+    startLine?: number;
+    endLine?: number;
+    symbolName?: string;
+    snippet?: string;
+    githubUrl?: string;
+  }>;
+  ragUsed?: boolean;
+}
+
+export async function askAnalysisChat(id: string, question: string): Promise<ChatResponse> {
   return fetchJson(`${API_BASE}/analyses/${id}/chat`, {
     method: 'POST',
     body: JSON.stringify({ question }),
   });
 }
+
+export async function getAnalysisRagStatus(id: string): Promise<{
+  enabled: boolean;
+  isIndexed: boolean;
+  status: string;
+  chunkCount: number;
+  commitSha?: string;
+  indexedAt?: string;
+  embeddingModel?: string;
+}> {
+  return fetchJson(`${API_BASE}/analyses/${id}/rag/status`);
+}
+
+export async function triggerAnalysisRagIndex(id: string): Promise<{ success: boolean; message: string }> {
+  return fetchJson(`${API_BASE}/analyses/${id}/rag/index`, {
+    method: 'POST',
+  });
+}
+
 
 export interface SystemStatus {
   database: {

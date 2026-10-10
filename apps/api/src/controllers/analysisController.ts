@@ -219,6 +219,20 @@ export async function createAnalysis(req: Request, res: Response): Promise<void>
           filesAnalyzed: result.filesAnalyzed,
           completedAt: new Date(),
         });
+
+        // Trigger background RAG indexing if feature flag is active and repository is public
+        if (config.rag?.enabled && !repoDoc.isPrivate) {
+          const { indexAnalysisSourceCode } = await import('../rag/indexingService');
+          indexAnalysisSourceCode({
+            analysisId: job._id.toString(),
+            prMeta,
+            files,
+            isPrivateRepo: false,
+            token: currentUser?.accessToken || undefined,
+          }).catch((ragErr) => {
+            console.warn(`[RAG Indexing] Background job error for ${job._id}:`, ragErr.message);
+          });
+        }
       } catch (pipelineErr: any) {
         if (!isTimedOut) {
           console.error(`[AnalysisJob] Pipeline failed for ${job._id}:`, pipelineErr);
@@ -487,18 +501,173 @@ export async function chatAnalysis(req: Request, res: Response): Promise<void> {
   const repo: any = job.repository;
   const pr: any = job.pullRequest;
 
-  const answer = await askAssistantQuestion(redactSensitiveData(question), {
-    prTitle: pr.title,
-    repo: repo.fullName,
-    findings: findings as any,
-    report: report as any,
-  });
+  const result = await askAssistantQuestion(
+    redactSensitiveData(question),
+    {
+      prTitle: pr.title,
+      repo: repo.fullName,
+      findings: findings as any,
+      report: report as any,
+    },
+    {
+      analysisId: job._id.toString(),
+      commitSha: pr.headSha,
+      isPrivate: repo.isPrivate === true,
+    }
+  );
 
   res.json({
     success: true,
     data: {
-      answer: redactSensitiveData(answer),
+      answer: redactSensitiveData(result.answer),
+      references: result.references || [],
+      ragUsed: Boolean(result.ragUsed),
       timestamp: new Date().toISOString(),
     },
+  });
+}
+
+export async function getAnalysisRagStatus(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ success: false, error: 'Invalid analysis ID' });
+    return;
+  }
+
+  const job = await AnalysisJob.findById(id).populate('repository');
+  if (!job) {
+    res.status(404).json({ success: false, error: 'Analysis job not found' });
+    return;
+  }
+
+  const access = await canAccessAnalysis(job, req.user);
+  if (!access.allowed) {
+    res.status(403).json({ success: false, error: access.reason });
+    return;
+  }
+
+  const repo: any = job.repository;
+  const { getIndexingStatus } = await import('../rag/indexingService');
+  const { CodeChunk } = await import('../rag/models/CodeChunk');
+
+  const inMemoryStatus = getIndexingStatus(id);
+  const storedChunkCount = await CodeChunk.countDocuments({ analysisId: job._id });
+
+  let computedStatus = inMemoryStatus.status;
+  if (repo.isPrivate) {
+    computedStatus = 'skipped_private';
+  } else if (storedChunkCount > 0) {
+    computedStatus = 'indexed';
+  }
+
+  res.json({
+    success: true,
+    data: {
+      enabled: Boolean(config.rag?.enabled),
+      isIndexed: storedChunkCount > 0,
+      status: computedStatus,
+      chunkCount: storedChunkCount,
+      commitSha: inMemoryStatus.commitSha,
+      indexedAt: inMemoryStatus.indexedAt,
+      embeddingModel: config.rag?.embeddingModel || 'gemini-embedding-001',
+    },
+  });
+}
+
+export async function triggerAnalysisRagIndex(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ success: false, error: 'Invalid analysis ID' });
+    return;
+  }
+
+  const job = await AnalysisJob.findById(id).populate('repository').populate('pullRequest');
+  if (!job) {
+    res.status(404).json({ success: false, error: 'Analysis job not found' });
+    return;
+  }
+
+  const access = await canAccessAnalysis(job, req.user);
+  if (!access.allowed) {
+    res.status(403).json({ success: false, error: access.reason });
+    return;
+  }
+
+  const repo: any = job.repository;
+  const pr: any = job.pullRequest;
+
+  if (repo.isPrivate) {
+    res.status(403).json({
+      success: false,
+      error: 'RAG indexing is restricted to public repositories pending cryptographic token authorization.',
+    });
+    return;
+  }
+
+  // Trigger background indexing asynchronously
+  (async () => {
+    try {
+      const { fetchPullRequestMetadata, fetchPullRequestFiles } = await import('../integrations/github');
+      const { indexAnalysisSourceCode } = await import('../rag/indexingService');
+      const prMeta = await fetchPullRequestMetadata(repo.owner, repo.name, pr.number);
+      const files = await fetchPullRequestFiles(repo.owner, repo.name, pr.number);
+      await indexAnalysisSourceCode({
+        analysisId: job._id.toString(),
+        prMeta,
+        files,
+        isPrivateRepo: false,
+      });
+    } catch (err: any) {
+      console.warn(`[triggerAnalysisRagIndex] Background indexing failed for ${job._id}:`, err.message);
+    }
+  })();
+
+  res.status(202).json({
+    success: true,
+    message: 'RAG indexing initiated successfully in the background.',
+  });
+}
+
+export async function searchAnalysisRag(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+  const query = req.body.query || req.body.question;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ success: false, error: 'Invalid analysis ID' });
+    return;
+  }
+
+  if (!query || typeof query !== 'string' || !query.trim()) {
+    res.status(400).json({ success: false, error: 'Search query must be a non-empty string' });
+    return;
+  }
+
+  const job = await AnalysisJob.findById(id).populate('repository').populate('pullRequest');
+  if (!job) {
+    res.status(404).json({ success: false, error: 'Analysis job not found' });
+    return;
+  }
+
+  const access = await canAccessAnalysis(job, req.user);
+  if (!access.allowed) {
+    res.status(403).json({ success: false, error: access.reason });
+    return;
+  }
+
+  const repo: any = job.repository;
+  const pr: any = job.pullRequest;
+
+  const { retrieveRelevantCode } = await import('../rag/retriever');
+  const results = await retrieveRelevantCode({
+    question: redactSensitiveData(query),
+    analysisId: id,
+    repository: repo.fullName,
+    commitSha: pr.headSha,
+    topK: Math.min(parseInt(req.body.limit || '6', 10), 10),
+  });
+
+  res.json({
+    success: true,
+    data: results,
   });
 }
