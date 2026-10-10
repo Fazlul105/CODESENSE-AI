@@ -31,7 +31,8 @@ export async function connectDatabase(): Promise<typeof mongoose> {
     if ((config.env === 'development' || config.env === 'test') && !isExplicitCloudUri) {
       try {
         console.log('[Database] Starting in-memory MongoDB server for seamless local testing...');
-        const { MongoMemoryServer } = await import('mongodb-memory-server');
+        const memModule: any = await (Function('m', 'return import(m)')('mongodb-memory-server'));
+        const MongoMemoryServer = memModule.MongoMemoryServer;
         memoryServer = await MongoMemoryServer.create();
         const memUri = memoryServer.getUri();
         const conn = await mongoose.connect(memUri);

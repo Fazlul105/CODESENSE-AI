@@ -16,8 +16,10 @@
     "test:api": "npm run test --workspace=@codesense/api",
     "test:web": "npm run test --workspace=@codesense/web"
   },
-  "devDependencies": {
-    "concurrently": "^9.1.2",
+  "dependencies": {
     "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }
