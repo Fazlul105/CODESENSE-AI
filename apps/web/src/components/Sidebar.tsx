@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, History, GitPullRequest, Settings, ShieldCheck, FolderGit2 } from 'lucide-react';
+import { LayoutDashboard, History, GitPullRequest, Activity, ShieldCheck, FolderGit2 } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -13,7 +13,7 @@ export function Sidebar() {
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { label: 'Analysis History', href: '/history', icon: History },
     { label: 'Repositories', href: '/repositories', icon: FolderGit2 },
-    { label: 'Settings', href: '/settings', icon: Settings },
+    { label: 'System Status', href: '/settings', icon: Activity },
   ];
 
   return (

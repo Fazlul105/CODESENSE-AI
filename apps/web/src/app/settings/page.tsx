@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  Settings,
+  Activity,
   Shield,
   Database,
   Github,
@@ -54,10 +54,11 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-            Application Settings & Configuration
+            <Activity className="h-6 w-6 text-blue-400" />
+            System Status & Diagnostics
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            System connectivity, AI review provider status, and environment variable configuration guide.
+            Real-time service health, AI provider connectivity, and backend deployment configuration.
           </p>
         </div>
         <button
@@ -177,7 +178,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                   <Info className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                   <span>
-                    To switch from Gemini to OpenAI, set <code className="text-slate-300">AI_PROVIDER=openai</code> and your API key in <code className="text-slate-300">.env</code>.
+                    To switch from Gemini to OpenAI, set <code className="text-slate-300">AI_PROVIDER=openai</code> and your API key in your environment configuration (Render / <code className="text-slate-300">.env</code>).
                   </span>
                 </div>
               </div>
@@ -228,18 +229,18 @@ export default function SettingsPage() {
               </div>
             </div>
             <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-400 border border-blue-500/20">
-              {status?.github?.hasToken ? 'PAT Active (5,000 req/hr)' : 'Octokit REST API'}
+              {status?.github?.hasOAuth ? 'OAuth & PAT Active' : status?.github?.hasToken ? 'PAT Active (5,000 req/hr)' : 'Octokit REST API'}
             </span>
           </div>
           <div className="mt-4 space-y-2 text-xs text-slate-400">
             <p>
               Public pull requests can be analyzed without authentication (up to GitHub&apos;s unauthenticated rate limit).
-              For 5,000 requests/hour and private repository access, set your credentials in <code className="text-slate-200">.env</code>:
+              For 5,000 requests/hour and private repository access, credentials are configured on the API backend:
             </p>
             <div className="rounded-lg bg-slate-950 p-3 font-mono text-slate-400 border border-slate-800/80 space-y-1">
-              <div>GITHUB_TOKEN={status?.github?.hasToken ? 'github_pat_11BOX... (Configured)' : 'ghp_your_personal_access_token_here'}</div>
-              <div>GITHUB_CLIENT_ID=your_oauth_client_id</div>
-              <div>GITHUB_CLIENT_SECRET=your_oauth_client_secret</div>
+              <div>GITHUB_TOKEN={status?.github?.hasToken ? 'github_pat_11BOX... (Active)' : 'Not configured'}</div>
+              <div>GITHUB_CLIENT_ID={status?.github?.hasOAuth ? 'Ov23liP... (Configured & Active)' : 'your_oauth_client_id'}</div>
+              <div>GITHUB_CLIENT_SECRET={status?.github?.hasOAuth ? '•••••••••••••••••••• (Active)' : 'your_oauth_client_secret'}</div>
             </div>
           </div>
         </div>
