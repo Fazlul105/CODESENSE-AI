@@ -15,6 +15,9 @@ import authRoutes from './routes/authRoutes';
 
 const app = express();
 
+// Trust reverse proxy (Render, Cloudflare, AWS) so secure cookies work properly
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
@@ -53,6 +56,7 @@ app.use(
       return callback(null, false);
     },
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   })
 );
 
@@ -60,12 +64,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(config.sessionSecret));
 
-// Session handling with secure cookies
+// Session handling with secure cookies & proxy awareness
 app.use(
   session({
     secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
+    proxy: true,
     cookie: {
       httpOnly: true,
       secure: config.env === 'production',

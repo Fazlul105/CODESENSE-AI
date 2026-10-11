@@ -10,25 +10,53 @@ export function Navbar() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 1. Instantly read cached user from localStorage to eliminate UI flicker
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('codesense_user');
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        }
+      } catch (_) {}
+    }
+
+    // 2. Validate and sync session with backend
     getCurrentUser()
-      .then((res) => {
+      .then((res: any) => {
         if (res?.isAuthenticated && res?.user) {
           setCurrentUser(res.user);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('codesense_user', JSON.stringify(res.user));
+            if (res.token) {
+              localStorage.setItem('codesense_token', res.token);
+            }
+          }
         } else {
-          setCurrentUser(null);
+          // If unauthenticated and no valid token, clear state
+          if (typeof window !== 'undefined' && !localStorage.getItem('codesense_token')) {
+            setCurrentUser(null);
+            localStorage.removeItem('codesense_user');
+          }
         }
       })
-      .catch(() => setCurrentUser(null))
+      .catch(() => {
+        // Network blip: retain local user if present
+      })
       .finally(() => setLoading(false));
   }, []);
 
   async function handleLogout() {
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('codesense_user');
+        localStorage.removeItem('codesense_token');
+      }
       await logoutUser();
-      setCurrentUser(null);
-      window.location.reload();
     } catch (err) {
       console.error('Logout error:', err);
+    } finally {
+      setCurrentUser(null);
+      window.location.href = '/';
     }
   }
 

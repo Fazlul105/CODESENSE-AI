@@ -13,6 +13,7 @@ router.get('/me', (req: Request, res: Response) => {
       success: true,
       data: {
         isAuthenticated: true,
+        token: req.user._id.toString(),
         user: {
           id: req.user._id.toString(),
           githubId: req.user.githubId,
@@ -135,6 +136,7 @@ router.post('/callback', async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
+        token: user._id.toString(),
         user: {
           id: user._id.toString(),
           githubId: user.githubId,
@@ -181,6 +183,7 @@ router.post('/dev-login', async (req: Request, res: Response) => {
   res.json({
     success: true,
     data: {
+      token: user._id.toString(),
       user: {
         id: user._id.toString(),
         githubId: user.githubId,

@@ -2,12 +2,24 @@ import { AnalysisJob, ReviewFinding, AnalysisReport, ApiResponse } from '@codese
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('codesense_token');
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
+    }
+  }
+  return {};
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const authHeaders = getAuthHeaders();
   const res = await fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...options?.headers,
     },
   });
@@ -21,6 +33,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 
 export async function getCurrentUser(): Promise<{
   isAuthenticated: boolean;
+  token?: string;
   user: {
     id: string;
     githubId: string;
@@ -35,6 +48,10 @@ export async function getCurrentUser(): Promise<{
 }
 
 export async function logoutUser(): Promise<{ success: boolean; message: string }> {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('codesense_token');
+    localStorage.removeItem('codesense_user');
+  }
   return fetchJson(`${API_BASE}/auth/logout`, { method: 'POST' });
 }
 

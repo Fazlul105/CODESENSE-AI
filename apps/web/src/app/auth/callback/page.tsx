@@ -20,8 +20,16 @@ function AuthCallbackContent() {
     }
 
     exchangeOAuthCode(code, state)
-      .then(() => {
-        router.push('/dashboard');
+      .then((data: any) => {
+        if (typeof window !== 'undefined') {
+          if (data?.user) {
+            localStorage.setItem('codesense_user', JSON.stringify(data.user));
+          }
+          if (data?.token) {
+            localStorage.setItem('codesense_token', data.token);
+          }
+        }
+        window.location.href = '/dashboard';
       })
       .catch((err) => {
         setError(err.message || 'Failed to complete authentication with GitHub.');
