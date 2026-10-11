@@ -19,14 +19,16 @@ for (const envPath of possibleEnvPaths) {
 }
 dotenv.config();
 
+const cleanFrontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+
 export const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.API_PORT || '5001', 10),
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  frontendUrl: cleanFrontendUrl,
   allowedOrigins: (process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim().replace(/\/+$/, ''))
     : [
-        process.env.FRONTEND_URL || 'http://localhost:3000',
+        cleanFrontendUrl,
         'https://codesense-ai-iota.vercel.app',
       ]
   ).filter(Boolean),
