@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { getDashboardStats, listAnalyses } from '@/lib/api';
+import { getDashboardStats, listAnalyses, getCurrentUser, API_BASE } from '@/lib/api';
 import { RiskBadge } from '@/components/RiskBadge';
 import {
   LayoutDashboard,
@@ -15,18 +15,87 @@ import {
   ArrowRight,
   Loader2,
   Calendar,
+  Lock,
+  Github,
 } from 'lucide-react';
 
 export default function DashboardPage() {
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('codesense_user');
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        }
+      } catch (_) {}
+    }
+
+    getCurrentUser()
+      .then((res: any) => {
+        if (res?.isAuthenticated && res?.user) {
+          setCurrentUser(res.user);
+        } else {
+          setCurrentUser(null);
+        }
+      })
+      .catch(() => setCurrentUser(null))
+      .finally(() => setAuthLoading(false));
+  }, []);
+
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
+    queryKey: ['dashboard-stats', currentUser?.id],
     queryFn: getDashboardStats,
+    enabled: !!currentUser,
   });
 
   const { data: recent, isLoading: recentLoading } = useQuery({
-    queryKey: ['recent-analyses'],
+    queryKey: ['recent-analyses', currentUser?.id],
     queryFn: () => listAnalyses(1, 5),
+    enabled: !!currentUser,
   });
+
+  if (authLoading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center flex-col gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <p className="text-sm text-slate-400">Verifying session...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex min-h-[75vh] items-center justify-center p-4">
+        <div className="max-w-md w-full rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center backdrop-blur shadow-2xl">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600/10 border border-blue-500/20 text-blue-400 mb-5">
+            <Lock className="h-7 w-7" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-100">Sign in to Access Dashboard</h2>
+          <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
+            Your review analytics dashboard is private. Please authenticate with GitHub to inspect your pull request review health, risk trends, and vulnerability metrics.
+          </p>
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <a
+              href={`${API_BASE}/auth/github`}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 transition"
+            >
+              <Github className="h-4 w-4" />
+              <span>Sign in with GitHub</span>
+            </a>
+            <Link
+              href="/"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition"
+            >
+              <span>Analyze Public PR</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (statsLoading || recentLoading) {
     return (

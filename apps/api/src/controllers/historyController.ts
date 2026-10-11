@@ -2,11 +2,28 @@ import { Request, Response } from 'express';
 import { AnalysisJob, AnalysisReport, ReviewFinding } from '../models';
 
 export async function listAnalyses(req: Request, res: Response): Promise<void> {
+  // If user is signed out, do not display or leak private/historical analyses
+  if (!req.user) {
+    res.json({
+      success: true,
+      data: {
+        analyses: [],
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 0,
+          totalPages: 0,
+        },
+      },
+    });
+    return;
+  }
+
   const page = parseInt(req.query.page as string, 10) || 1;
   const limit = parseInt(req.query.limit as string, 10) || 10;
   const status = req.query.status as string;
 
-  const query: any = {};
+  const query: any = { user: req.user._id };
   if (status) {
     query.status = status;
   }
@@ -61,11 +78,45 @@ export async function listAnalyses(req: Request, res: Response): Promise<void> {
 }
 
 export async function getDashboardStats(req: Request, res: Response): Promise<void> {
-  const [totalAnalyses, totalCompleted, reports, allFindings] = await Promise.all([
-    AnalysisJob.countDocuments(),
-    AnalysisJob.countDocuments({ status: 'completed' }),
-    AnalysisReport.find().limit(100),
-    ReviewFinding.find().select('severity category').limit(1000),
+  // If user is signed out, return zeroed metrics
+  if (!req.user) {
+    res.json({
+      success: true,
+      data: {
+        totalAnalyses: 0,
+        totalCompleted: 0,
+        totalFindings: 0,
+        avgRiskScore: 0,
+        severityCounts: {
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          informational: 0,
+        },
+        categoryCounts: {
+          potential_bug: 0,
+          security: 0,
+          code_quality: 0,
+          performance: 0,
+          maintainability: 0,
+        },
+      },
+    });
+    return;
+  }
+
+  const userFilter = { user: req.user._id };
+  const [totalAnalyses, totalCompleted, userJobs] = await Promise.all([
+    AnalysisJob.countDocuments(userFilter),
+    AnalysisJob.countDocuments({ ...userFilter, status: 'completed' }),
+    AnalysisJob.find(userFilter).select('_id'),
+  ]);
+
+  const jobIds = userJobs.map((j) => j._id);
+  const [reports, allFindings] = await Promise.all([
+    AnalysisReport.find({ analysisId: { $in: jobIds } }).limit(100),
+    ReviewFinding.find({ analysisId: { $in: jobIds } }).select('severity category').limit(1000),
   ]);
 
   const severityCounts = {

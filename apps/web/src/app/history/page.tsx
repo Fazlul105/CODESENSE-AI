@@ -1,20 +1,85 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { listAnalyses } from '@/lib/api';
+import { listAnalyses, getCurrentUser, API_BASE } from '@/lib/api';
 import { RiskBadge } from '@/components/RiskBadge';
-import { History, ChevronLeft, ChevronRight, Loader2, GitPullRequest, Calendar } from 'lucide-react';
+import { History, ChevronLeft, ChevronRight, Loader2, GitPullRequest, Calendar, Lock, Github } from 'lucide-react';
 
 export default function HistoryPage() {
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [page, setPage] = useState(1);
   const limit = 10;
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('codesense_user');
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        }
+      } catch (_) {}
+    }
+
+    getCurrentUser()
+      .then((res: any) => {
+        if (res?.isAuthenticated && res?.user) {
+          setCurrentUser(res.user);
+        } else {
+          setCurrentUser(null);
+        }
+      })
+      .catch(() => setCurrentUser(null))
+      .finally(() => setAuthLoading(false));
+  }, []);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['analyses-history', page],
+    queryKey: ['analyses-history', currentUser?.id, page],
     queryFn: () => listAnalyses(page, limit),
+    enabled: !!currentUser,
   });
+
+  if (authLoading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center flex-col gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <p className="text-sm text-slate-400">Verifying session...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex min-h-[75vh] items-center justify-center p-4">
+        <div className="max-w-md w-full rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center backdrop-blur shadow-2xl">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600/10 border border-blue-500/20 text-blue-400 mb-5">
+            <Lock className="h-7 w-7" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-100">Sign in to View History</h2>
+          <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
+            Pull request review history is private to your GitHub account. Please authenticate with GitHub to access your past review records.
+          </p>
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <a
+              href={`${API_BASE}/auth/github`}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 transition"
+            >
+              <Github className="h-4 w-4" />
+              <span>Sign in with GitHub</span>
+            </a>
+            <Link
+              href="/"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition"
+            >
+              <span>Analyze Public PR</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
